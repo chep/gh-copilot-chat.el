@@ -13,11 +13,11 @@ This plugin allows you to chat with GitHub copilot.
 Feel free to contribute, report issues or discuss new features.
 
 * News
-** MCP server experimental support
-We use the [[https://github.com/lizqwerscott/mcp.el][mcp.el]] package to support MCP servers. Configure it and run ~gh-copilot-chat-set-mcp-servers~. It seems to work better with Claude models. Feedback is welcome.
-
-** Copilot-Vision
-When using =gpt-4o= model, you can now send images to Copilot. Open it in Emacs and add the buffer to the context like any other one.
+** Repository renaming
+~copilot-chat~ has been renamed ~gh-copilot-chat~ to avoid conflicts with ~copilot.el~.
+Everything is the same, functions and variable just have the ~gh-~ prefix.
+Melpa udpate is in progress.
+Please open issues if something is wrong.
 
 ** Help wanted
 Bug reports, PR and new ideas are very welcome.
