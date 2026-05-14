@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-mcp.el --- mcp servers management -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-mcp.el --- mcp servers management -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -28,14 +28,14 @@
 
 (require 'json)
 (require 'mcp-hub)
-(require 'copilot-chat-instance)
+(require 'gh-copilot-chat-instance)
 
-(declare-function copilot-chat--ask "copilot-chat-copilot")
-(declare-function copilot-chat-prompt-cb "copilot-chat-prompt-mode")
+(declare-function gh-copilot-chat--ask "gh-copilot-chat-copilot")
+(declare-function gh-copilot-chat-prompt-cb "gh-copilot-chat-prompt-mode")
 
 
 (cl-defstruct
- copilot-chat-function
+ gh-copilot-chat-function
  "Structure to hold function information."
  (name "" :type string)
  (arguments "" :type string)
@@ -43,12 +43,12 @@
  (index -1 :type integer))
 
 
-(defun copilot-chat--update-function (function args)
+(defun gh-copilot-chat--update-function (function args)
   "Update FUNCTION by appending ARGS to its arguments."
-  (setf (copilot-chat-function-arguments function)
-        (concat (copilot-chat-function-arguments function) args)))
+  (setf (gh-copilot-chat-function-arguments function)
+        (concat (gh-copilot-chat-function-arguments function) args)))
 
-(defun copilot-chat--append-vector-to-functions (vector functions)
+(defun gh-copilot-chat--append-vector-to-functions (vector functions)
   "Create or update FUNCTIONS elements using tool call data from VECTOR."
   (let ((name "")
         (args "")
@@ -69,11 +69,13 @@
     ;; search for function with index
     (let ((func
            (seq-find
-            (lambda (f) (= (copilot-chat-function-index f) index)) functions)))
+            (lambda (f)
+              (= (gh-copilot-chat-function-index f) index))
+            functions)))
       (if func
-          (copilot-chat--update-function func args)
+          (gh-copilot-chat--update-function func args)
         (let ((new-function
-               (make-copilot-chat-function
+               (make-gh-copilot-chat-function
                 :name name
                 :arguments args
                 :id id
@@ -81,10 +83,10 @@
           (setq functions (append functions (list new-function))))))
     functions))
 
-(defun copilot-chat--mcp-find-connection (instance function)
+(defun gh-copilot-chat--mcp-find-connection (instance function)
   "Find the MCP connection for the given FUNCTION in INSTANCE."
   (catch 'break
-    (dolist (server (copilot-chat-mcp-servers instance))
+    (dolist (server (gh-copilot-chat-mcp-servers instance))
       (let ((connection (gethash server mcp-server-connections)))
         (when connection
           (let ((tools (mcp--tools connection)))
@@ -92,24 +94,24 @@
                    (lambda (item)
                      (string=
                       (plist-get item :name)
-                      (copilot-chat-function-name function)))
+                      (gh-copilot-chat-function-name function)))
                    tools)
               (throw 'break connection))))))
     nil))
 
-(defun copilot-chat--send-function-result-if-needed
+(defun gh-copilot-chat--send-function-result-if-needed
     (instance callback results functions)
   "Send the FUNCTIONS results if all calls are completed.
 INSTANCE is the copilot chat instance.
-CALLBACK is `copilot-chat--ask' callback.
+CALLBACK is `gh-copilot-chat--ask' callback.
 RESULTS is the list of results collected.
 ARGLIST is the list of arguments that were processed."
   (when (= (length results) (length functions))
-    (copilot-chat--ask instance results callback)))
+    (gh-copilot-chat--ask instance results callback)))
 
-(defun copilot-chat--activate-mcp-servers (instance)
+(defun gh-copilot-chat--activate-mcp-servers (instance)
   "Start the MCP server connections for INSTANCE."
-  (let ((servers (copilot-chat-mcp-servers instance)))
+  (let ((servers (gh-copilot-chat-mcp-servers instance)))
     (dolist (server-name servers)
       (dolist (server mcp-hub-servers)
         (when (string= server-name (car server))
@@ -131,11 +133,11 @@ ARGLIST is the list of arguments that were processed."
                      (lambda (_ err)
                        (error (concat "MCP server start error :" err))))))))))))
 
-(defun copilot-chat--get-tools (instance responses-api)
+(defun gh-copilot-chat--get-tools (instance responses-api)
   "Return the list of tools from the MCP servers managed in INSTANCE.
 If RESPONSES-API is t, use openAI responses format."
   (let ((all-tools nil))
-    (dolist (server (copilot-chat-mcp-servers instance))
+    (dolist (server (gh-copilot-chat-mcp-servers instance))
       (let ((connection (gethash server mcp-server-connections)))
         (when connection
           (let ((tools (mcp--tools connection)))
@@ -170,8 +172,8 @@ If RESPONSES-API is t, use openAI responses format."
              tools)))))
     all-tools))
 
-(provide 'copilot-chat-mcp)
-;;; copilot-chat-mcp.el ends here
+(provide 'gh-copilot-chat-mcp)
+;;; gh-copilot-chat-mcp.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

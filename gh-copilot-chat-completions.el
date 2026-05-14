@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-completions.el --- copilot chat completions api implementation -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-completions.el --- copilot chat completions api implementation -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -26,22 +26,22 @@
 ;; This is the completions api implementation for the backend
 
 ;;; Code:
-(require 'copilot-chat-backend)
-(require 'copilot-chat-mcp)
-(require 'copilot-chat-instance)
-(require 'copilot-chat-body)
-(require 'copilot-chat-spinner)
+(require 'gh-copilot-chat-backend)
+(require 'gh-copilot-chat-mcp)
+(require 'gh-copilot-chat-instance)
+(require 'gh-copilot-chat-body)
+(require 'gh-copilot-chat-spinner)
 
 
 (cl-defstruct
- copilot-chat-completions
+ gh-copilot-chat-completions
  "Private data for Copilot chat /completions endpoint."
  (current-data nil :type (or null string))
  (answer nil :type (or null string))
  (functions nil :type list))
 
 
-(defun copilot-chat--completions-extract-segment (segment)
+(defun gh-copilot-chat--completions-extract-segment (segment)
   "Extract data from an individual line-delimited SEGMENT, returning one of:
 - `empty` if the segment has no data
 - `partial`: if the segment seems to be incomplete, i.e. more data in a
@@ -85,57 +85,45 @@ Argument SEGMENT is data segment to parse."
        'partial)))))
 
 
-(defun copilot-chat--completions-call-functions (instance functions callback)
+(defun gh-copilot-chat--completions-call-functions (instance functions callback)
   "Call the FUNCTIONS and manage the result.
 INSTANCE is the copilot chat instance."
   (let ((results nil))
     (dolist (function functions)
-      (let* ((connection (copilot-chat--mcp-find-connection instance function))
-             (name (copilot-chat-function-name function))
-             (arguments (copilot-chat-function-arguments function)))
-        (if (yes-or-no-p
-             (format
-              "Copilot Chat wants to call the tool '%s' with arguments: %s. Allow?"
-              name
-              (if (string-empty-p arguments)
-                  "none"
-                arguments)))
-            (mcp-async-call-tool
-             connection name
-             (if (and arguments (not (string-empty-p arguments)))
-                 (json-parse-string arguments
-                                    :object-type 'alist
-                                    :false-object
-                                    :json-false)
-               nil)
-             (lambda (result)
-               (push `(:role
-                       "tool"
-                       :tool_call_id ,(copilot-chat-function-id function)
-                       :name ,name
-                       :content
-                       ,(plist-get (aref (plist-get result :content) 0) :text))
-                     results)
-               (copilot-chat--send-function-result-if-needed
-                instance callback results functions))
-             (lambda (_ msg)
-               (message "Error calling function %s: %s" name msg)
-               (push `(:role
-                       "tool"
-                       :tool_call_id ,(copilot-chat-function-id function)
-                       :content ,msg)
-                     results)
-               (copilot-chat--send-function-result-if-needed
-                instance callback results functions)))
-          (push `(:role
-                  "tool"
-                  :tool_call_id ,(copilot-chat-function-id function)
-                  :content ,(format "User denied the tool call for '%s'." name))
-                results)
-          (copilot-chat--send-function-result-if-needed
-           instance callback results functions))))))
+      (let* ((connection
+              (gh-copilot-chat--mcp-find-connection instance function))
+             (name (gh-copilot-chat-function-name function))
+             (arguments (gh-copilot-chat-function-arguments function)))
+        (mcp-async-call-tool
+         connection name
+         (if (and arguments (not (string-empty-p arguments)))
+             (json-parse-string arguments
+                                :object-type 'alist
+                                :false-object
+                                :json-false)
+           nil)
+         (lambda (result)
+           (push `(:role
+                   "tool"
+                   :tool_call_id ,(gh-copilot-chat-function-id function)
+                   :name ,name
+                   :content
+                   ,(plist-get (aref (plist-get result :content) 0) :text))
+                 results)
+           (gh-copilot-chat--send-function-result-if-needed
+            instance callback results functions))
+         (lambda (_ msg)
+           (message "Error calling function %s: %s" name msg)
+           (push `(:role
+                   "tool"
+                   :tool_call_id ,(gh-copilot-chat-function-id function)
+                   :content ,msg)
+                 results)
+           (gh-copilot-chat--send-function-result-if-needed
+            instance callback results functions)))))))
 
-(defun copilot-chat--completions-analyze
+
+(defun gh-copilot-chat--completions-analyze
     (instance completions string callback no-history)
   "Analyse curl response when using /chat/completions endpoint.
 Argument INSTANCE is the copilot chat instance to use.
@@ -174,27 +162,28 @@ if the response should be added to history."
   ;;    the next line skipped, and then "data: [D" saved to `current-data'.
   ;;
   ;; 3. With segment 3, `current-data' is prepended to `string', resulting in a value of
-  ;;    "data: [DONE]\n\n". Thus, `callback' is called with the value of `copilot-chat--magic', and
+  ;;    "data: [DONE]\n\n". Thus, `callback' is called with the value of `gh-copilot-chat--magic', and
   ;;    the two trailing empty lines are skipped.
-  (when (copilot-chat-completions-current-data completions)
+  (when (gh-copilot-chat-completions-current-data completions)
     (setq string
-          (concat (copilot-chat-completions-current-data completions) string))
-    (setf (copilot-chat-completions-current-data completions) nil))
+          (concat
+           (gh-copilot-chat-completions-current-data completions) string))
+    (setf (gh-copilot-chat-completions-current-data completions) nil))
 
   (let ((segments (split-string string "\n")))
     (dolist (segment segments)
-      (let ((extracted (copilot-chat--completions-extract-segment segment)))
+      (let ((extracted (gh-copilot-chat--completions-extract-segment segment)))
         (cond
          ;; No data at all, just skip:
          ((eq extracted 'empty)
           nil)
          ;; Data looks truncated, save it for the next segment:
          ((eq extracted 'partial)
-          (setf (copilot-chat-completions-current-data completions) segment))
+          (setf (gh-copilot-chat-completions-current-data completions) segment))
          ;; Final segment, all done:
          ((eq extracted 'done)
-          (let ((answer (copilot-chat-completions-answer completions))
-                (functions (copilot-chat-completions-functions completions)))
+          (let ((answer (gh-copilot-chat-completions-answer completions))
+                (functions (gh-copilot-chat-completions-functions completions)))
 
             ;; History
             (unless no-history
@@ -205,38 +194,38 @@ if the response should be added to history."
                           "")
                        :role "assistant")))
                 (when functions
-                  (setq new-hist
-                        (append
-                         new-hist
-                         `(:tool_calls
-                           ,(vconcat
-                             (mapcar
-                              (lambda (function)
-                                `(:type
-                                  "function"
-                                  :id ,(copilot-chat-function-id function)
-                                  :function
-                                  (:name
-                                   ,(copilot-chat-function-name function)
-                                   :arguments
-                                   ,(copilot-chat-function-arguments
-                                     function))))
-                              functions))))))
+                  (setq
+                   new-hist
+                   (append
+                    new-hist
+                    `(:tool_calls
+                      ,(vconcat
+                        (mapcar
+                         (lambda (function)
+                           `(:type
+                             "function"
+                             :id ,(gh-copilot-chat-function-id function)
+                             :function
+                             (:name
+                              ,(gh-copilot-chat-function-name function)
+                              :arguments
+                              ,(gh-copilot-chat-function-arguments function))))
+                         functions))))))
                 (when (or (not (string-empty-p answer)) functions)
-                  (push new-hist (copilot-chat-history instance)))))
+                  (push new-hist (gh-copilot-chat-history instance)))))
 
             ;; manage tool
             (if functions
                 ;; We have tools to call
-                (copilot-chat--completions-call-functions
+                (gh-copilot-chat--completions-call-functions
                  instance functions callback)
               ;; Else, we are not using tools,
               ;; so just we can send magic and clean.
-              (copilot-chat--spinner-stop instance)
-              (funcall callback instance copilot-chat--magic))
+              (gh-copilot-chat--spinner-stop instance)
+              (funcall callback instance gh-copilot-chat--magic))
             (setf
-             (copilot-chat-completions-functions completions) nil
-             (copilot-chat-completions-answer completions) nil)))
+             (gh-copilot-chat-completions-functions completions) nil
+             (gh-copilot-chat-completions-answer completions) nil)))
 
          ;; Otherwise, JSON parsed successfully
          (extracted
@@ -252,42 +241,43 @@ if the response should be added to history."
                 (if (eq token :null)
                     (let ((tool_calls (alist-get 'tool_calls delta)))
                       (when (and tool_calls (not (eq tool_calls :null)))
-                        (setf (copilot-chat-completions-functions completions)
-                              (copilot-chat--append-vector-to-functions
+                        (setf (gh-copilot-chat-completions-functions
+                               completions)
+                              (gh-copilot-chat--append-vector-to-functions
                                tool_calls
-                               (copilot-chat-completions-functions
+                               (gh-copilot-chat-completions-functions
                                 completions)))))
-                  (when (not (copilot-chat-completions-answer completions))
-                    (copilot-chat--spinner-set-status instance "Generating"))
+                  (when (not (gh-copilot-chat-completions-answer completions))
+                    (gh-copilot-chat--spinner-set-status instance "Generating"))
                   (funcall callback instance token)
-                  (setf (copilot-chat-completions-answer completions)
+                  (setf (gh-copilot-chat-completions-answer completions)
                         (concat
-                         (copilot-chat-completions-answer completions)
+                         (gh-copilot-chat-completions-answer completions)
                          token))))))
 
            ;; display .error.message in the chat.
            ((alist-get 'error extracted)
-            (copilot-chat--spinner-stop instance)
+            (gh-copilot-chat--spinner-stop instance)
             (let* ((err-response (alist-get 'error extracted))
                    (err-message (alist-get 'message err-response))
                    (answer (format "Error: %s" err-message)))
               (message answer)
               (funcall callback instance answer)
-              (funcall callback instance copilot-chat--magic)
+              (funcall callback instance gh-copilot-chat--magic)
               ;; Add an empty response to the chat history to avoid confusing
               ;; the assistant with its own error messages...
               (setf
-               (copilot-chat-history instance)
+               (gh-copilot-chat-history instance)
                (cons
                 `(:content "" :role "assistant")
-                (copilot-chat-history instance))
-               (copilot-chat-completions-answer completions) nil
-               (copilot-chat-completions-functions completions) nil)))
+                (gh-copilot-chat-history instance))
+               (gh-copilot-chat-completions-answer completions) nil
+               (gh-copilot-chat-completions-functions completions) nil)))
            ;; Fallback -- nag developers about possibly unhandled payloads
            (t
             (warn "Unhandled message from copilot: %S" extracted)))))))))
 
-(defun copilot-chat--completions-analyze-nonstream
+(defun gh-copilot-chat--completions-analyze-nonstream
     (instance completions proc string callback no-history)
   "Analyse curl response non stream version.
 o1 differs from the other models in the format of the reply.
@@ -298,10 +288,11 @@ Argument STRING is the data returned by curl.
 Argument CALLBACK is the function to call with analysed data.
 Argument NO-HISTORY is a boolean to indicate
  if the response should be added to history."
-  (when (copilot-chat-completions-current-data completions)
+  (when (gh-copilot-chat-completions-current-data completions)
     (setq string
-          (concat (copilot-chat-completions-current-data completions) string))
-    (setf (copilot-chat-completions-current-data completions) nil))
+          (concat
+           (gh-copilot-chat-completions-current-data completions) string))
+    (setf (gh-copilot-chat-completions-current-data completions) nil))
 
   (condition-case err
       (let* ((extracted
@@ -315,22 +306,22 @@ Argument NO-HISTORY is a boolean to indicate
                    (alist-get 'message (aref choices 0))))
              (token (and message (alist-get 'content message))))
         (when (and token (not (eq token :null)))
-          (copilot-chat--spinner-stop instance)
+          (gh-copilot-chat--spinner-stop instance)
           (funcall callback instance token)
-          (funcall callback instance copilot-chat--magic)
-          (setf (copilot-chat-completions-answer completions)
-                (concat (copilot-chat-completions-answer completions) token))
+          (funcall callback instance gh-copilot-chat--magic)
+          (setf (gh-copilot-chat-completions-answer completions)
+                (concat (gh-copilot-chat-completions-answer completions) token))
           (unless no-history
-            (setf (copilot-chat-history instance)
+            (setf (gh-copilot-chat-history instance)
                   (cons
                    `(:content
-                     ,(copilot-chat-completions-answer completions)
+                     ,(gh-copilot-chat-completions-answer completions)
                      :role "assistant")
-                   (copilot-chat-history instance))))
+                   (gh-copilot-chat-history instance))))
           (setf
-           (copilot-chat-completions-answer completions) nil
-           (copilot-chat-completions-functions completions) nil
-           (copilot-chat-completions-current-data completions) nil)))
+           (gh-copilot-chat-completions-answer completions) nil
+           (gh-copilot-chat-completions-functions completions) nil
+           (gh-copilot-chat-completions-current-data completions) nil)))
     ;; o1 often returns `rate limit exceeded` because of its severe rate limitation,
     ;; so the message in case of an error should be easy to understand.
     (error
@@ -339,42 +330,43 @@ Argument NO-HISTORY is a boolean to indicate
      ;; wait for the next call.
      ;; I'm not sure if asynchronous control is working properly.
      (progn
-       (setf (copilot-chat-completions-current-data completions) string)
+       (setf (gh-copilot-chat-completions-current-data completions) string)
        (unless (process-live-p proc)
-         (copilot-chat--spinner-stop instance)
-         (setf (copilot-chat-completions-current-data completions) nil)
+         (gh-copilot-chat--spinner-stop instance)
+         (setf (gh-copilot-chat-completions-current-data completions) nil)
          (funcall callback
                   instance
                   (format "GitHub Copilot error: %S\nResponse is %S"
                           err
                           (string-trim string))))))))
 
-(defun copilot-chat--completions-create-req (instance prompt no-context)
+(defun gh-copilot-chat--completions-create-req (instance prompt no-context)
   "Create a request for Copilot.
 Argument INSTANCE is the copilot chat instance to use.
 Argument PROMPT Copilot prompt to send (string or list of json objects)
-Argument NO-CONTEXT tells `copilot-chat' to not send history and buffers.
+Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers.
 The create req function is called first and will return new prompt."
   (let* ((create-req-fn
-          (copilot-chat-frontend-create-req-fn (copilot-chat--get-frontend)))
+          (gh-copilot-chat-frontend-create-req-fn
+           (gh-copilot-chat--get-frontend)))
          (copilot-instruction-content
-          (and copilot-chat-use-copilot-instruction-files
-               (copilot-chat--read-copilot-instructions-file)))
+          (and gh-copilot-chat-use-copilot-instruction-files
+               (gh-copilot-chat--read-copilot-instructions-file)))
          (formatted-copilot-instructions
           (and copilot-instruction-content
-               (copilot-chat--format-copilot-instructions
+               (gh-copilot-chat--format-copilot-instructions
                 copilot-instruction-content)))
          (git-commit-instruction-content
-          (and copilot-chat-use-git-commit-instruction-files
-               (copilot-chat--read-git-commit-instructions-file)))
+          (and gh-copilot-chat-use-git-commit-instruction-files
+               (gh-copilot-chat--read-git-commit-instructions-file)))
          (messages (list))
-         (tools (copilot-chat--get-tools instance nil)))
+         (tools (gh-copilot-chat--get-tools instance nil)))
     ;; Apply create-req-fn if available
     (when create-req-fn
       (setq prompt (funcall create-req-fn prompt no-context)))
 
     ;; reset vision support
-    (setf (copilot-chat-uses-vision instance) nil)
+    (setf (gh-copilot-chat-uses-vision instance) nil)
 
     ;; user prompt
     (if (stringp prompt)
@@ -385,14 +377,15 @@ The create req function is called first and will return new prompt."
     ;; Add context if needed
     (unless no-context
       ;; Clean buffer list once and add buffer contents
-      (setf (copilot-chat-buffers instance)
-            (cl-remove-if-not #'buffer-live-p (copilot-chat-buffers instance)))
-      (dolist (buffer (copilot-chat-buffers instance))
+      (setf (gh-copilot-chat-buffers instance)
+            (cl-remove-if-not
+             #'buffer-live-p (gh-copilot-chat-buffers instance)))
+      (dolist (buffer (gh-copilot-chat-buffers instance))
         (setq messages
-              (copilot-chat--add-buffer-to-req buffer instance messages)))
+              (gh-copilot-chat--add-buffer-to-req buffer instance messages)))
 
       ;; history
-      (dolist (elt (copilot-chat-history instance))
+      (dolist (elt (gh-copilot-chat-history instance))
         (cond
          ((plist-member elt :content)
           (push elt messages))
@@ -416,17 +409,17 @@ The create req function is called first and will return new prompt."
        `(:content ,formatted-copilot-instructions :role "system") messages))
 
     (when (and git-commit-instruction-content
-               (eq (copilot-chat-type instance) 'commit))
+               (eq (gh-copilot-chat-type instance) 'commit))
       (push
        `(:content ,git-commit-instruction-content :role "system") messages))
 
-    (push `(:content ,copilot-chat-prompt :role "system") messages)
+    (push `(:content ,gh-copilot-chat-prompt :role "system") messages)
 
-    (json-serialize (if (copilot-chat--instance-support-streaming instance)
+    (json-serialize (if (gh-copilot-chat--instance-support-streaming instance)
                         `(:messages
                           ,(vconcat messages)
                           :top_p 1
-                          :model ,(copilot-chat-model instance)
+                          :model ,(gh-copilot-chat-model instance)
                           :stream t
                           :n 1
                           :intent t
@@ -435,15 +428,15 @@ The create req function is called first and will return new prompt."
                           :parallel_tool_calls t)
                       `(:messages
                         ,(vconcat messages)
-                        :model ,(copilot-chat-model instance)
+                        :model ,(gh-copilot-chat-model instance)
                         :stream
                         :json-false))
                     :false-object
                     :json-false)))
 
 
-(provide 'copilot-chat-completions)
-;;; copilot-chat-completions.el ends here
+(provide 'gh-copilot-chat-completions)
+;;; gh-copilot-chat-completions.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

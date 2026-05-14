@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-frontend.el --- define copilot frontend interface -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-frontend.el --- define copilot frontend interface -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -28,10 +28,10 @@
 
 (require 'cl-lib)
 
-(defvar copilot-chat-frontend)
+(defvar gh-copilot-chat-frontend)
 
 (cl-defstruct
- copilot-chat-frontend
+ gh-copilot-chat-frontend
  id
  init-fn
  clean-fn
@@ -53,34 +53,36 @@
  goto-input-fn
  get-spinner-buffers-fn)
 
-(defvar copilot-chat--frontend-list '()
+(defvar gh-copilot-chat--frontend-list '()
   "Copilot-chat frontends and functions list.
-Each element must be a `copilot-chat-frontend' struct instance.
+Each element must be a `gh-copilot-chat-frontend' struct instance.
 Elements are added in the module that defines each front end.")
 
-(defvar copilot-chat--frontend-init-p nil
+(defvar gh-copilot-chat--frontend-init-p nil
   "Flag to indicate if the frontend has been initialized.")
 
-(cl-declaim (type (list-of copilot-chat-frontend) copilot-chat--frontend-list))
+(cl-declaim
+ (type (list-of gh-copilot-chat-frontend) gh-copilot-chat--frontend-list))
 
-(defun copilot-chat--get-frontend ()
+(defun gh-copilot-chat--get-frontend ()
   "Get frontend from custom."
   (cl-find
-   copilot-chat-frontend
-   copilot-chat--frontend-list
-   :key #'copilot-chat-frontend-id
+   gh-copilot-chat-frontend
+   gh-copilot-chat--frontend-list
+   :key #'gh-copilot-chat-frontend-id
    :test #'eq))
 
-(defun copilot-chat--get-buffer (instance)
+(defun gh-copilot-chat--get-buffer (instance)
   "Get Copilot Chat buffer from the active frontend.
 Argument INSTANCE is the copilot chat instance to get the buffer for."
   (let ((get-buffer-fn
-         (copilot-chat-frontend-get-buffer-fn (copilot-chat--get-frontend))))
+         (gh-copilot-chat-frontend-get-buffer-fn
+          (gh-copilot-chat--get-frontend))))
     (when get-buffer-fn
       (funcall get-buffer-fn instance))))
 
-(provide 'copilot-chat-frontend)
-;;; copilot-chat-frontend.el ends here
+(provide 'gh-copilot-chat-frontend)
+;;; gh-copilot-chat-frontend.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

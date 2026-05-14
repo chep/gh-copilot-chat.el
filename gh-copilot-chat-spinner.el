@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-spinner.el --- copilot chat spinner -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-spinner.el --- copilot chat spinner -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -26,116 +26,117 @@
 
 ;;; Code:
 
-(require 'copilot-chat-instance)
-(require 'copilot-chat-frontend)
+(require 'gh-copilot-chat-instance)
+(require 'gh-copilot-chat-frontend)
 
-(defcustom copilot-chat-spinner-frames
+(defcustom gh-copilot-chat-spinner-frames
   '("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
   "Frames used for the spinner animation during streaming."
   :type '(repeat string)
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
-(defcustom copilot-chat-spinner-interval 0.1
+(defcustom gh-copilot-chat-spinner-interval 0.1
   "Interval in seconds between spinner frame updates."
   :type 'number
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
-(defface copilot-chat-spinner-face '((t :inherit font-lock-keyword-face))
+(defface gh-copilot-chat-spinner-face '((t :inherit font-lock-keyword-face))
   "Face used for the spinner during streaming."
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
 
-(defun copilot-chat--get-spinner-buffers (instance)
+(defun gh-copilot-chat--get-spinner-buffers (instance)
   "Get Spinner buffer from the active frontend.
 Argument INSTANCE is the copilot chat instance to get the buffer for."
   (condition-case err
       (let ((get-buffer-fn
-             (copilot-chat-frontend-get-spinner-buffers-fn
-              (copilot-chat--get-frontend))))
+             (gh-copilot-chat-frontend-get-spinner-buffers-fn
+              (gh-copilot-chat--get-frontend))))
         (when (and get-buffer-fn
-                   (buffer-live-p (copilot-chat-chat-buffer instance)))
+                   (buffer-live-p (gh-copilot-chat-chat-buffer instance)))
           (funcall get-buffer-fn instance)))
     (error
-     (when copilot-chat-debug
+     (when gh-copilot-chat-debug
        (message "Error getting spinner buffer: %S" err))
      nil)))
 
-(defun copilot-chat--spinner-start (instance)
+(defun gh-copilot-chat--spinner-start (instance)
   "Start the spinner animation in the Copilot Chat buffer.
 Argument INSTANCE is the copilot chat instance to use."
-  (when (copilot-chat-spinner-timer instance)
-    (cancel-timer (copilot-chat-spinner-timer instance)))
+  (when (gh-copilot-chat-spinner-timer instance)
+    (cancel-timer (gh-copilot-chat-spinner-timer instance)))
 
   (setf
-   (copilot-chat-spinner-index instance) 0
-   (copilot-chat-spinner-status instance) "Thinking"
-   (copilot-chat-spinner-timer instance)
+   (gh-copilot-chat-spinner-index instance) 0
+   (gh-copilot-chat-spinner-status instance) "Thinking"
+   (gh-copilot-chat-spinner-timer instance)
    (run-with-timer
-    0 copilot-chat-spinner-interval #'copilot-chat--spinner-update
+    0 gh-copilot-chat-spinner-interval #'gh-copilot-chat--spinner-update
     instance)))
 
-(defun copilot-chat--spinner-update (instance)
+(defun gh-copilot-chat--spinner-update (instance)
   "Update the spinner animation in the Copilot Chat buffer.
 Argument INSTANCE is the copilot chat instance to use."
-  (let ((buffers (copilot-chat--get-spinner-buffers instance)))
+  (let ((buffers (gh-copilot-chat--get-spinner-buffers instance)))
     (dolist (buffer buffers)
       (when (and buffer (buffer-live-p buffer))
         (let ((frame
                (nth
-                (copilot-chat-spinner-index instance)
-                copilot-chat-spinner-frames))
+                (gh-copilot-chat-spinner-index instance)
+                gh-copilot-chat-spinner-frames))
               (status-text
-               (if (copilot-chat-spinner-status instance)
-                   (concat (copilot-chat-spinner-status instance) " ")
+               (if (gh-copilot-chat-spinner-status instance)
+                   (concat (gh-copilot-chat-spinner-status instance) " ")
                  "")))
           (with-current-buffer buffer
             (save-excursion
               ;; Remove existing spinner overlay if any
-              (remove-overlays (point-min) (point-max) 'copilot-chat-spinner t)
+              (remove-overlays
+               (point-min) (point-max) 'gh-copilot-chat-spinner t)
               ;; Create new spinner overlay at the end of buffer
               (goto-char (point-max))
               (let ((ov (make-overlay (point) (point))))
-                (overlay-put ov 'copilot-chat-spinner t)
+                (overlay-put ov 'gh-copilot-chat-spinner t)
                 (overlay-put
                  ov 'after-string
                  (propertize (concat status-text frame)
                              'face
-                             'copilot-chat-spinner-face))))))
+                             'gh-copilot-chat-spinner-face))))))
 
         ;; Update spinner index
-        (setf (copilot-chat-spinner-index instance)
-              (% (1+ (copilot-chat-spinner-index instance))
-                 (length copilot-chat-spinner-frames)))))))
+        (setf (gh-copilot-chat-spinner-index instance)
+              (% (1+ (gh-copilot-chat-spinner-index instance))
+                 (length gh-copilot-chat-spinner-frames)))))))
 
-(defun copilot-chat--spinner-stop (instance)
+(defun gh-copilot-chat--spinner-stop (instance)
   "Stop the spinner animation.
 Argument INSTANCE is the copilot chat instance to use."
-  (when (copilot-chat-spinner-timer instance)
-    (cancel-timer (copilot-chat-spinner-timer instance))
-    (setf (copilot-chat-spinner-timer instance) nil))
+  (when (gh-copilot-chat-spinner-timer instance)
+    (cancel-timer (gh-copilot-chat-spinner-timer instance))
+    (setf (gh-copilot-chat-spinner-timer instance) nil))
 
   ;; Remove spinner overlay - with robust error handling
   (condition-case err
-      (let ((buffers (copilot-chat--get-spinner-buffers instance)))
+      (let ((buffers (gh-copilot-chat--get-spinner-buffers instance)))
         (dolist (buffer buffers)
           (when (and buffer (buffer-live-p buffer))
             (with-current-buffer buffer
               (remove-overlays
-               (point-min) (point-max) 'copilot-chat-spinner t)))))
+               (point-min) (point-max) 'gh-copilot-chat-spinner t)))))
     (error
-     (when copilot-chat-debug
+     (when gh-copilot-chat-debug
        (message "Error stopping spinner: %S" err)))))
 
-(defun copilot-chat--spinner-set-status (instance status)
+(defun gh-copilot-chat--spinner-set-status (instance status)
   "Set the status message to display with the spinner.
 Argument INSTANCE is the copilot chat instance to use.
 Argument STATUS is the status message to display."
-  (setf (copilot-chat-spinner-status instance) status)
-  (when (copilot-chat-spinner-timer instance)
-    (copilot-chat--spinner-update instance)))
+  (setf (gh-copilot-chat-spinner-status instance) status)
+  (when (gh-copilot-chat-spinner-timer instance)
+    (gh-copilot-chat--spinner-update instance)))
 
-(provide 'copilot-chat-spinner)
-;;; copilot-chat-spinner.el ends here
+(provide 'gh-copilot-chat-spinner)
+;;; gh-copilot-chat-spinner.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)
