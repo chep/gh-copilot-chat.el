@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-connection.el --- copilot chat connection -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-connection.el --- copilot chat connection -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -29,8 +29,8 @@
 (require 'cl-lib)
 
 (cl-defstruct
- (copilot-chat-connection
-  (:constructor copilot-chat-connection--make) (:copier nil))
+ (gh-copilot-chat-connection
+  (:constructor gh-copilot-chat-connection--make) (:copier nil))
  "Struct for Copilot connection information."
  (ready nil :type boolean)
  (github-token nil :type (or null string))
@@ -40,13 +40,13 @@
  (models nil :type list)
  (last-models-fetch-time 0 :type number))
 
-(defvar copilot-chat--connection (copilot-chat-connection--make)
+(defvar gh-copilot-chat--connection (gh-copilot-chat-connection--make)
   "Connection information for Copilot chat.")
 
-(cl-declaim (type copilot-chat-connection copilot-chat--connection))
+(cl-declaim (type gh-copilot-chat-connection gh-copilot-chat--connection))
 
-(provide 'copilot-chat-connection)
-;;; copilot-chat-connection.el ends here
+(provide 'gh-copilot-chat-connection)
+;;; gh-copilot-chat-connection.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

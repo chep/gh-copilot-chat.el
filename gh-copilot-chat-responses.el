@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-responses.el --- copilot chat responses api implementation -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-responses.el --- copilot chat responses api implementation -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -26,21 +26,21 @@
 ;; This is the responses api implementation for the backend
 
 ;;; Code:
-(require 'copilot-chat-backend)
-(require 'copilot-chat-mcp)
-(require 'copilot-chat-instance)
-(require 'copilot-chat-body)
-(require 'copilot-chat-spinner)
+(require 'gh-copilot-chat-backend)
+(require 'gh-copilot-chat-mcp)
+(require 'gh-copilot-chat-instance)
+(require 'gh-copilot-chat-body)
+(require 'gh-copilot-chat-spinner)
 
 ;; structures
 (cl-defstruct
- copilot-chat-responses
+ gh-copilot-chat-responses
  "Private data for Copilot chat /responses endpoint."
  (current-data nil :type (or null string))
  (event nil :type (or null symbol)))
 
 ;; functions
-(defun copilot-chat--responses-extract-segment (segment)
+(defun gh-copilot-chat--responses-extract-segment (segment)
   "Extract data from an individual line-delimited SEGMENT, returning one of:
 - `empty` if the segment has no data
 - `partial`: if the segment seems to be incomplete, i.e. more data in a
@@ -73,7 +73,7 @@ Argument SEGMENT is data segment to parse."
       (error
        'partial)))))
 
-(defun copilot-chat--responses-manage-data
+(defun gh-copilot-chat--responses-manage-data
     (instance responses callback no-history data)
   "Manage DATA extracted from /responses endpoint.
 Argument INSTANCE is the copilot chat instance to use.
@@ -81,11 +81,11 @@ Argument RESPONSES is the copilot chat responses data.
 Argument CALLBACK is the function to call with analysed data.
 Argument NO-HISTORY is a boolean to indicate
 if the response should be added to history."
-  (let* ((event (copilot-chat-responses-event responses)))
+  (let* ((event (gh-copilot-chat-responses-event responses)))
     (cond
      ((string= event "response.created")
-      (setf responses (make-copilot-chat-responses))
-      (copilot-chat--spinner-set-status instance "Generating"))
+      (setf responses (make-gh-copilot-chat-responses))
+      (gh-copilot-chat--spinner-set-status instance "Generating"))
      ((string= event "response.in_progress"))
      ((string= event "response.output_item.added")
       ;; extract `content` from the item element and display it if needed
@@ -117,7 +117,7 @@ if the response should be added to history."
              (cond
               ;; find function call and add to functions
               ((string= (alist-get 'type elt) "function_call")
-               (push (make-copilot-chat-function
+               (push (make-gh-copilot-chat-function
                       :name (alist-get 'name elt)
                       :arguments (alist-get 'arguments elt)
                       :id (alist-get 'call_id elt)
@@ -147,29 +147,29 @@ if the response should be added to history."
                         (lambda (function)
                           `(:type
                             "function"
-                            :id ,(copilot-chat-function-id function)
+                            :id ,(gh-copilot-chat-function-id function)
                             :function
                             (:name
-                             ,(copilot-chat-function-name function)
+                             ,(gh-copilot-chat-function-name function)
                              :arguments
-                             ,(copilot-chat-function-arguments function))))
+                             ,(gh-copilot-chat-function-arguments function))))
                         (reverse functions)))))))
-          (push new-hist (copilot-chat-history instance)))
+          (push new-hist (gh-copilot-chat-history instance)))
 
         ;; manage tool
         (if functions
             ;; We have tools to call
-            (copilot-chat--responses-call-functions
+            (gh-copilot-chat--responses-call-functions
              instance (reverse functions) callback)
           ;; Else, we are not using tools,
           ;; so just we can send magic and clean.
-          (copilot-chat--spinner-stop instance)
-          (funcall callback instance copilot-chat--magic))))
+          (gh-copilot-chat--spinner-stop instance)
+          (funcall callback instance gh-copilot-chat--magic))))
      ((string= event "response.incomplete"))
      (t))))
 
 
-(defun copilot-chat--responses-analyze
+(defun gh-copilot-chat--responses-analyze
     (instance responses string callback no-history)
   "Analyse curl response when using /responses endpoint.
 Argument INSTANCE is the copilot chat instance to use.
@@ -178,56 +178,56 @@ Argument STRING is the data returned by curl.
 Argument CALLBACK is the function to call with analysed data.
 Argument NO-HISTORY is a boolean to indicate
 if the response should be added to history."
-  (let ((current-data (copilot-chat-responses-current-data responses)))
+  (let ((current-data (gh-copilot-chat-responses-current-data responses)))
     (when current-data
       (setq string (concat current-data string))
-      (setf (copilot-chat-responses-current-data responses) nil)))
+      (setf (gh-copilot-chat-responses-current-data responses) nil)))
 
   (let ((segments (split-string string "\n")))
     (dolist (segment segments)
       ;;(funcall callback instance (concat "Brut :\n" segment "\nFin brut\n\n"))
-      (let ((extracted (copilot-chat--responses-extract-segment segment)))
+      (let ((extracted (gh-copilot-chat--responses-extract-segment segment)))
         (cond
          ;; No data at all, just skip:
          ((eq extracted 'empty)
           nil)
          ;; Data looks truncated, save it for the next segment:
          ((eq extracted 'partial)
-          (setf (copilot-chat-responses-current-data responses) segment))
+          (setf (gh-copilot-chat-responses-current-data responses) segment))
          ;; new event
          ((eq extracted 'event)
-          (setf (copilot-chat-responses-event responses) (substring segment 7)))
+          (setf (gh-copilot-chat-responses-event responses) (substring segment 7)))
          ;; Otherwise, JSON parsed successfully
          (extracted
-          (copilot-chat--responses-manage-data
+          (gh-copilot-chat--responses-manage-data
            instance responses callback no-history extracted)))))))
 
-(defun copilot-chat--responses-create-req (instance prompt no-context)
+(defun gh-copilot-chat--responses-create-req (instance prompt no-context)
   "Create a request for Copilot using responses api.
 Argument INSTANCE is the copilot chat instance to use.
 Argument PROMPT Copilot prompt to send (string or list of json objects)
-Argument NO-CONTEXT tells `copilot-chat' to not send history and buffers."
+Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers."
   (let* ((create-req-fn
-          (copilot-chat-frontend-create-req-fn (copilot-chat--get-frontend)))
+          (gh-copilot-chat-frontend-create-req-fn (gh-copilot-chat--get-frontend)))
          (copilot-instruction-content
-          (and copilot-chat-use-copilot-instruction-files
-               (copilot-chat--read-copilot-instructions-file)))
+          (and gh-copilot-chat-use-copilot-instruction-files
+               (gh-copilot-chat--read-copilot-instructions-file)))
          (formatted-copilot-instructions
           (and copilot-instruction-content
-               (copilot-chat--format-copilot-instructions
+               (gh-copilot-chat--format-copilot-instructions
                 copilot-instruction-content)))
          (git-commit-instruction-content
-          (and copilot-chat-use-git-commit-instruction-files
-               (copilot-chat--read-git-commit-instructions-file)))
+          (and gh-copilot-chat-use-git-commit-instruction-files
+               (gh-copilot-chat--read-git-commit-instructions-file)))
          (messages nil)
-         (tools (copilot-chat--get-tools instance t)))
+         (tools (gh-copilot-chat--get-tools instance t)))
 
     ;; Apply create-req-fn if available
     (when create-req-fn
       (setq prompt (funcall create-req-fn prompt no-context)))
 
     ;; reset vision support
-    (setf (copilot-chat-uses-vision instance) nil)
+    (setf (gh-copilot-chat-uses-vision instance) nil)
 
     ;; user prompt
     (if (stringp prompt)
@@ -237,14 +237,14 @@ Argument NO-CONTEXT tells `copilot-chat' to not send history and buffers."
     ;; Add context if needed
     (unless no-context
       ;; Clean buffer list once and add buffer contents
-      (setf (copilot-chat-buffers instance)
-            (cl-remove-if-not #'buffer-live-p (copilot-chat-buffers instance)))
-      (dolist (buffer (copilot-chat-buffers instance))
+      (setf (gh-copilot-chat-buffers instance)
+            (cl-remove-if-not #'buffer-live-p (gh-copilot-chat-buffers instance)))
+      (dolist (buffer (gh-copilot-chat-buffers instance))
         (setq messages
-              (copilot-chat--add-buffer-to-req buffer instance messages)))
+              (gh-copilot-chat--add-buffer-to-req buffer instance messages)))
 
       ;; history
-      (dolist (elt (copilot-chat-history instance))
+      (dolist (elt (gh-copilot-chat-history instance))
         (cond
          ((plist-member elt :tool_calls)
           (mapc
@@ -276,13 +276,13 @@ Argument NO-CONTEXT tells `copilot-chat' to not send history and buffers."
            (if formatted-copilot-instructions
                formatted-copilot-instructions
              (if (and git-commit-instruction-content
-                      (eq (copilot-chat-type instance) 'commit))
+                      (eq (gh-copilot-chat-type instance) 'commit))
                  git-commit-instruction-content
-               copilot-chat-prompt))))
+               gh-copilot-chat-prompt))))
 
       ;; Create the appropriate payload based on model type
       (json-serialize `(:model
-                        ,(copilot-chat-model instance)
+                        ,(gh-copilot-chat-model instance)
                         :background
                         :json-false
                         :input ,(vconcat messages)
@@ -293,14 +293,14 @@ Argument NO-CONTEXT tells `copilot-chat' to not send history and buffers."
                       :json-false))))
 
 
-(defun copilot-chat--responses-call-functions (instance functions callback)
+(defun gh-copilot-chat--responses-call-functions (instance functions callback)
   "Call the FUNCTIONS and manage the result.
 INSTANCE is the copilot chat instance."
   (let ((results nil))
     (dolist (function functions)
-      (let* ((connection (copilot-chat--mcp-find-connection instance function))
-             (name (copilot-chat-function-name function))
-             (arguments (copilot-chat-function-arguments function)))
+      (let* ((connection (gh-copilot-chat--mcp-find-connection instance function))
+             (name (gh-copilot-chat-function-name function))
+             (arguments (gh-copilot-chat-function-arguments function)))
         (if (yes-or-no-p
              (format
               "Copilot Chat wants to call the tool '%s' with arguments: %s. Allow?"
@@ -320,31 +320,31 @@ INSTANCE is the copilot chat instance."
              (lambda (result)
                (push `(:type
                        "function_call_output"
-                       :call_id ,(copilot-chat-function-id function)
+                       :call_id ,(gh-copilot-chat-function-id function)
                        :output
                        ,(plist-get (aref (plist-get result :content) 0) :text))
                      results)
-               (copilot-chat--send-function-result-if-needed
+               (gh-copilot-chat--send-function-result-if-needed
                 instance callback results functions))
              (lambda (_ msg)
                (message "Error calling function %s: %s" name msg)
                (push `(:type
                        "function_call_output"
-                       :call_id ,(copilot-chat-function-id function)
+                       :call_id ,(gh-copilot-chat-function-id function)
                        :output ,msg)
                      results)
-               (copilot-chat--send-function-result-if-needed
+               (gh-copilot-chat--send-function-result-if-needed
                 instance callback results functions)))
           (push `(:role
                   "tool"
-                  :tool_call_id ,(copilot-chat-function-id function)
+                  :tool_call_id ,(gh-copilot-chat-function-id function)
                   :content ,(format "User denied the tool call for '%s'." name))
                 results)
-          (copilot-chat--send-function-result-if-needed
+          (gh-copilot-chat--send-function-result-if-needed
            instance callback results functions))))))
 
-(provide 'copilot-chat-responses)
-;;; copilot-chat-responses.el ends here
+(provide 'gh-copilot-chat-responses)
+;;; gh-copilot-chat-responses.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

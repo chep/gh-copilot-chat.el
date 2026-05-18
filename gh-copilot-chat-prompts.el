@@ -1,6 +1,6 @@
-;;; copilot-chat --- copilot-chat-prompts.el --- copilot chat prompts -*- lexical-binding: t; -*-
+;;; gh-copilot-chat --- gh-copilot-chat-prompts.el --- copilot chat prompts -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024  copilot-chat maintainers
+;; Copyright (C) 2024  gh-copilot-chat maintainers
 
 ;; The MIT License (MIT)
 
@@ -26,7 +26,7 @@
 
 
 ;;; Code:
-(defcustom copilot-chat-commit-prompt
+(defcustom gh-copilot-chat-commit-prompt
   "You are a commit message generator.
 Your ONLY task is to produce a Git commit message.
 Your task is to generate a single Git commit message that **strictly follows the Conventional Commits v1.0.0 Specification**.
@@ -184,14 +184,14 @@ Refs: #123
 "
   "The prompt used to generate a commit message."
   :type 'string
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
-(defcustom copilot-chat-markdown-prompt ""
+(defcustom gh-copilot-chat-markdown-prompt ""
   "The prompt to use for Copilot chat."
   :type 'string
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
-(defcustom copilot-chat-org-prompt
+(defcustom gh-copilot-chat-org-prompt
   "The user works in an IDE called Emacs which has an org major mode for keeping notes, authoring documents, computational notebooks, literate programming, maintaining to-do lists, planning projects, and more — in a fast and effective plain text system.
 
 Use only Emacs org-mode formatting in your answers.
@@ -207,13 +207,13 @@ Avoid wrapping the whole response in the block code.
 Don't forget the most important rule when you are formatting your response: use emacs org-mode syntax only."
   "The prompt used for org frontend."
   :type 'string
-  :group 'copilot-chat)
+  :group 'gh-copilot-chat)
 
-(defvar copilot-chat-prompt ""
+(defvar gh-copilot-chat-prompt ""
   "The prompt to use for Copilot chat.")
 
-(provide 'copilot-chat-prompts)
-;;; copilot-chat-prompts.el ends here
+(provide 'gh-copilot-chat-prompts)
+;;; gh-copilot-chat-prompts.el ends here
 
 ;; Local Variables:
 ;; byte-compile-warnings: (not obsolete)

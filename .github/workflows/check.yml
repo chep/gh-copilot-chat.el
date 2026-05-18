@@ -20,5 +20,5 @@ jobs:
       - run: git diff --exit-code
       - uses: leotaku/elisp-check@v1.4.1
         with:
-          file: "copilot-chat*.el"
+          file: "gh-copilot-chat*.el"
           warnings_as_errors: true
