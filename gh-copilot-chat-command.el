@@ -109,7 +109,9 @@ to Copilot for processing."
          (gh-copilot-chat--format-data instance prompt 'prompt) nil)
         (with-current-buffer (gh-copilot-chat--get-buffer instance)
           (recenter-top-bottom))
-        (setf (gh-copilot-chat-prompt-history-position instance) nil)
+        (setf
+         (gh-copilot-chat-prompt-history-position instance) nil
+         (gh-copilot-chat-allow-all instance) nil)
         (gh-copilot-chat--ask instance prompt 'gh-copilot-chat-prompt-cb)))))
 
 ;;;###autoload (autoload 'gh-copilot-chat-ask-and-insert "gh-copilot-chat" nil t)
