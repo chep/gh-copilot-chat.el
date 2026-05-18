@@ -58,7 +58,8 @@ Use `gh-copilot-chat-set-model' to interactively select a model."
  (-backend nil)
  (-frontend nil)
  (file-path nil :type string)
- (mcp-servers nil))
+ (mcp-servers nil)
+ (allow-all nil :type boolean))
 
 (defvar gh-copilot-chat--instances (list)
   "Global instance of Copilot chat.")

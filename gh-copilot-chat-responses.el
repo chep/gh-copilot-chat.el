@@ -196,7 +196,8 @@ if the response should be added to history."
           (setf (gh-copilot-chat-responses-current-data responses) segment))
          ;; new event
          ((eq extracted 'event)
-          (setf (gh-copilot-chat-responses-event responses) (substring segment 7)))
+          (setf (gh-copilot-chat-responses-event responses)
+                (substring segment 7)))
          ;; Otherwise, JSON parsed successfully
          (extracted
           (gh-copilot-chat--responses-manage-data
@@ -208,7 +209,8 @@ Argument INSTANCE is the copilot chat instance to use.
 Argument PROMPT Copilot prompt to send (string or list of json objects)
 Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers."
   (let* ((create-req-fn
-          (gh-copilot-chat-frontend-create-req-fn (gh-copilot-chat--get-frontend)))
+          (gh-copilot-chat-frontend-create-req-fn
+           (gh-copilot-chat--get-frontend)))
          (copilot-instruction-content
           (and gh-copilot-chat-use-copilot-instruction-files
                (gh-copilot-chat--read-copilot-instructions-file)))
@@ -238,7 +240,8 @@ Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers."
     (unless no-context
       ;; Clean buffer list once and add buffer contents
       (setf (gh-copilot-chat-buffers instance)
-            (cl-remove-if-not #'buffer-live-p (gh-copilot-chat-buffers instance)))
+            (cl-remove-if-not
+             #'buffer-live-p (gh-copilot-chat-buffers instance)))
       (dolist (buffer (gh-copilot-chat-buffers instance))
         (setq messages
               (gh-copilot-chat--add-buffer-to-req buffer instance messages)))
@@ -298,16 +301,27 @@ Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers."
 INSTANCE is the copilot chat instance."
   (let ((results nil))
     (dolist (function functions)
-      (let* ((connection (gh-copilot-chat--mcp-find-connection instance function))
-             (name (gh-copilot-chat-function-name function))
-             (arguments (gh-copilot-chat-function-arguments function)))
-        (if (yes-or-no-p
-             (format
-              "Copilot Chat wants to call the tool '%s' with arguments: %s. Allow?"
-              name
-              (if (string-empty-p arguments)
-                  "none"
-                arguments)))
+      (let*
+          ((connection
+            (gh-copilot-chat--mcp-find-connection instance function))
+           (name (gh-copilot-chat-function-name function))
+           (arguments (gh-copilot-chat-function-arguments function))
+           (choice
+            (if (gh-copilot-chat-allow-all instance)
+                "all"
+              (read-answer
+               (format
+                "Copilot Chat wants to call the tool '%s' with arguments: %s. Allow?"
+                name
+                (if (string-empty-p arguments)
+                    "none"
+                  arguments))
+               '(("yes" ?y "allow this call")
+                 ("no" ?n "deny this call")
+                 ("all" ?! "allow all remaining calls"))))))
+        (when (string= choice "all")
+          (setf (gh-copilot-chat-allow-all instance) t))
+        (if (or (string= choice "yes") (string= choice "all"))
             (mcp-async-call-tool
              connection name
              (if (and arguments (not (string-empty-p arguments)))
