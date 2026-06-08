@@ -209,8 +209,8 @@ Optional argument TYPE is the type of the instance (nil or commit)."
          (gh-copilot-chat-backend-login-fn (gh-copilot-chat--get-backend))))
     (if login-fn
         (funcall login-fn)
-      (error "No login function for backend: %s"
-             (gh-copilot-chat--get-backend)))))
+      (error
+       "No login function for backend: %s" (gh-copilot-chat--get-backend)))))
 
 
 (defun gh-copilot-chat--renew-token ()
@@ -220,8 +220,9 @@ Optional argument TYPE is the type of the instance (nil or commit)."
           (gh-copilot-chat--get-backend))))
     (if renew-fn
         (funcall renew-fn)
-      (error "No renew token function for backend: %s"
-             (gh-copilot-chat--get-backend)))))
+      (error
+       "No renew token function for backend: %s"
+       (gh-copilot-chat--get-backend)))))
 
 (defun gh-copilot-chat--auth ()
   "Authenticate with GitHub Copilot API.
@@ -272,8 +273,8 @@ Argument OUT-OF-CONTEXT indicates if prompt is out of context (git commit)."
     (gh-copilot-chat--auth)
     (if ask-fn
         (funcall ask-fn instance prompt callback out-of-context)
-      (error "No ask function for backend: %s"
-             (gh-copilot-chat--get-backend)))))
+      (error
+       "No ask function for backend: %s" (gh-copilot-chat--get-backend)))))
 
 (defun gh-copilot-chat--add-buffer (instance buffer)
   "Add a BUFFER to copilot buffers list.

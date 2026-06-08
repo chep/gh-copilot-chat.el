@@ -428,8 +428,8 @@ and temporarily disabling the org frontend's `create-req-fn` if active."
   "Generate and insert a commit message using GitHub Copilot."
   (interactive)
   (when buffer-read-only
-    (signal 'buffer-read-only
-            (format "Buffer `%s' is read-only" (buffer-name))))
+    (signal
+     'buffer-read-only (format "Buffer `%s' is read-only" (buffer-name))))
   (aio-with-async
    (let* ((instance (gh-copilot-chat--ensure-commit-instance))
           (current-buf (current-buffer))
