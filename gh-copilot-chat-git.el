@@ -405,7 +405,8 @@ PARAMS is a `gh-copilot-chat--commit-callback-params' struct containing:
 
 (defmacro gh-copilot-chat--with-commit-context (&rest body)
   "Execute BODY with commit-specific context.
-This involves setting `gh-copilot-chat-prompt` to `gh-copilot-chat-commit-prompt`
+This involves setting `gh-copilot-chat-prompt`
+to `gh-copilot-chat-commit-prompt`
 and temporarily disabling the org frontend's `create-req-fn` if active."
   `(let ((gh-copilot-chat-prompt gh-copilot-chat-commit-prompt)
          (frontend (gh-copilot-chat--get-frontend))

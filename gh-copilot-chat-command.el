@@ -381,7 +381,8 @@ Optional argument ARG if non-nil, force instance selection."
     (gh-copilot-chat-list-refresh instance)))
 
 (defun gh-copilot-chat-add-file (file-path)
-  "Add FILE-PATH to `gh-copilot-chat' buffers without changing current window layout."
+  "Add FILE-PATH to `gh-copilot-chat' buffers.
+Without changing current window layout."
   (interactive "fFile to add: ")
   (save-window-excursion
     (let ((current-buf (current-buffer)))
