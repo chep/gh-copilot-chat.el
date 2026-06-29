@@ -209,9 +209,8 @@ Optional argument TYPE is the type of the instance (nil or commit)."
          (gh-copilot-chat-backend-login-fn (gh-copilot-chat--get-backend))))
     (if login-fn
         (funcall login-fn)
-      (error
-       "No login function for backend: %s" (gh-copilot-chat--get-backend)))))
-
+      (error "No login function for backend: %s"
+             (gh-copilot-chat--get-backend)))))
 
 (defun gh-copilot-chat--renew-token ()
   "Renew the session token."
@@ -220,47 +219,54 @@ Optional argument TYPE is the type of the instance (nil or commit)."
           (gh-copilot-chat--get-backend))))
     (if renew-fn
         (funcall renew-fn)
-      (error
-       "No renew token function for backend: %s"
-       (gh-copilot-chat--get-backend)))))
+      (error "No renew token function for backend: %s"
+             (gh-copilot-chat--get-backend)))))
 
 (defun gh-copilot-chat--auth ()
   "Authenticate with GitHub Copilot API.
 We first need github authorization (github token).
 Then we need a session token."
-  (unless (gh-copilot-chat-connection-github-token gh-copilot-chat--connection)
-    (let ((token (gh-copilot-chat--get-cached-token)))
-      (if token
-          (setf (gh-copilot-chat-connection-github-token
-                 gh-copilot-chat--connection)
-                token)
-        (gh-copilot-chat--login))))
-
-  (when (null (gh-copilot-chat-connection-token gh-copilot-chat--connection))
-    ;; try to load token from ~/.cache/gh-copilot-chat-token
-    (let ((token-file (expand-file-name gh-copilot-chat-token-cache)))
-      (when (file-exists-p token-file)
-        (with-temp-buffer
-          (insert-file-contents token-file)
-          (let ((token
-                 (json-read-from-string
-                  (buffer-substring-no-properties (point-min) (point-max)))))
-            (if (string= "Bad credentials" (alist-get 'message token))
-                (gh-copilot-chat--login)
-              (setf (gh-copilot-chat-connection-token
+  (let ((login-fn
+         (gh-copilot-chat-backend-login-fn (gh-copilot-chat--get-backend))))
+    (when login-fn
+      (unless (gh-copilot-chat-connection-github-token
+               gh-copilot-chat--connection)
+        (let ((token (gh-copilot-chat--get-cached-token)))
+          (if token
+              (setf (gh-copilot-chat-connection-github-token
                      gh-copilot-chat--connection)
-                    token)))))))
+                    token)
+            (gh-copilot-chat--login))))
 
-  (when (let* ((token
-                (gh-copilot-chat-connection-token gh-copilot-chat--connection))
-               (expires-at (and (listp token) (alist-get 'expires_at token)))
-               (now (round (float-time (current-time)))))
-          ;; Renew token if missing, malformed, or expired.
-          (or (null token)
-              (null expires-at)
-              (and (numberp expires-at) (> now expires-at))))
-    (gh-copilot-chat--renew-token))
-  (setf (gh-copilot-chat-connection-ready gh-copilot-chat--connection) t))
+      (when (null
+             (gh-copilot-chat-connection-token gh-copilot-chat--connection))
+        ;; try to load token from ~/.cache/gh-copilot-chat-token
+        (let ((token-file (expand-file-name gh-copilot-chat-token-cache)))
+          (when (file-exists-p token-file)
+            (with-temp-buffer
+              (insert-file-contents token-file)
+              (let ((token
+                     (json-read-from-string
+                      (buffer-substring-no-properties
+                       (point-min) (point-max)))))
+                (if (string= "Bad credentials" (alist-get 'message token))
+                    (gh-copilot-chat--login)
+                  (setf (gh-copilot-chat-connection-token
+                         gh-copilot-chat--connection)
+                        token)))))))
+
+      (when (let* ((token
+                    (gh-copilot-chat-connection-token
+                     gh-copilot-chat--connection))
+                   (expires-at
+                    (and (listp token) (alist-get 'expires_at token)))
+                   (now (round (float-time (current-time)))))
+              ;; Renew token if missing, malformed, or expired.
+              (or (null token)
+                  (null expires-at)
+                  (and (numberp expires-at) (> now expires-at))))
+        (gh-copilot-chat--renew-token))
+      (setf (gh-copilot-chat-connection-ready gh-copilot-chat--connection) t))))
 
 (defun gh-copilot-chat--ask (instance prompt callback &optional out-of-context)
   "Ask a question to Copilot.
@@ -273,8 +279,8 @@ Argument OUT-OF-CONTEXT indicates if prompt is out of context (git commit)."
     (gh-copilot-chat--auth)
     (if ask-fn
         (funcall ask-fn instance prompt callback out-of-context)
-      (error
-       "No ask function for backend: %s" (gh-copilot-chat--get-backend)))))
+      (error "No ask function for backend: %s"
+             (gh-copilot-chat--get-backend)))))
 
 (defun gh-copilot-chat--add-buffer (instance buffer)
   "Add a BUFFER to copilot buffers list.
