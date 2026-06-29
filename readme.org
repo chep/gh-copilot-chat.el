@@ -101,9 +101,56 @@ Clone repository and eval files in Emacs.
 You will need a GitHub account with access to copilot API. When sending the first prompt, you will need to authenticate to GitHub. Follow instructions and everything will be fine.
 
 ** Backend
-~gh-copilot-chat-backend~ can only be set to ~'curl~.
+~gh-copilot-chat-backend~ can be set to ~'curl~ (default) or ~'claude~.
 
-With curl, answers will be written token by token. Curl path can be set with the `gh-copilot-chat-curl-program` variable.
+With curl, answers will be written token by token. Curl path can be set with the ~gh-copilot-chat-curl-program~ variable.
+
+*** Claude backend
+The ~claude~ backend uses the [[https://docs.anthropic.com/en/docs/claude-code][Claude CLI]] instead of the GitHub Copilot API. It does not require a GitHub account - authentication is handled by the Claude CLI itself.
+
+**** Prerequisites
+- Install the Claude CLI and make sure it is available in your PATH. See [[https://docs.anthropic.com/en/docs/claude-code/getting-started][Getting started with Claude Code]].
+- Log in with ~claude login~ at least once before using this backend.
+
+**** Basic configuration
+#+begin_src emacs-lisp
+(setq gh-copilot-chat-backend 'claude)
+#+end_src
+
+Or with ~use-package~:
+#+begin_src emacs-lisp
+(use-package gh-copilot-chat
+  :config
+  (setq gh-copilot-chat-backend 'claude))
+#+end_src
+
+**** Allowed tools
+By default, no tools are passed to the Claude CLI. You can allow specific built-in tools using the ~gh-copilot-chat-claude-allowed-tools~ variable (maps to ~--allowedTools~):
+#+begin_src emacs-lisp
+;; Example: allow bash and file editing tools
+(setq gh-copilot-chat-claude-allowed-tools "Bash,Edit,Write")
+#+end_src
+
+**** MCP servers
+When MCP servers are configured via ~mcp-hub-servers~ and enabled for a ~gh-copilot-chat~ instance (using ~gh-copilot-chat-set-mcp-servers~), they are automatically passed to the Claude CLI via ~--mcp-config~. This allows Claude to use your MCP tools directly.
+
+Example with a GitHub MCP server:
+#+begin_src emacs-lisp
+(setopt mcp-hub-servers
+  '(("github" .
+     (:command "docker"
+      :args ("run" "-i" "--rm"
+             "-e" "GITHUB_PERSONAL_ACCESS_TOKEN"
+             "ghcr.io/github/github-mcp-server")
+      :env (:GITHUB_PERSONAL_ACCESS_TOKEN "Your PAT")))))
+
+(setq gh-copilot-chat-backend 'claude)
+#+end_src
+
+Then enable the server for your instance with ~gh-copilot-chat-set-mcp-servers~.
+
+**** Session resumption
+The Claude backend automatically resumes the conversation session between prompts using ~--resume~. This means the full conversation context is preserved inside the Claude CLI process, without being re-sent to the API on each turn.
 
 ** Frontend
 Several frontends are available. You can select your favorite one by setting the ~gh-copilot-chat-frontend~ variable to ~'org~ (default), ~'markdown~ or ~'shell-maker~.
@@ -217,11 +264,13 @@ You can call ~(gh-copilot-chat-transient)~ to open transient menu. Almost all fu
 All variables can be customized using ~M-x customize-group RET gh-copilot-chat RET~.
 
 *** Backend
-- ~gh-copilot-chat-backend~ - Backend to use for API calls. Can be ~'curl~.
+- ~gh-copilot-chat-backend~ - Backend to use for API calls. Can be ~'curl~ (default) or ~'claude~.
 - ~gh-copilot-chat-curl-program~ - Path to curl executable when using curl backend.
 - ~gh-copilot-chat-curl-proxy~ - Proxy configuration for curl backend. Supports HTTP/HTTPS/SOCKS protocols.
 - ~gh-copilot-chat-curl-proxy-insecure~ - Skip SSL verification for proxy connections in curl backend.
 - ~gh-copilot-chat-curl-proxy-user-pass~ - Proxy authentication credentials for curl backend.
+- ~gh-copilot-chat-claude-program~ - Path to the ~claude~ CLI executable (default: ~"claude"~). Set this if ~claude~ is not in your PATH.
+- ~gh-copilot-chat-claude-allowed-tools~ - Comma-separated list of tools allowed for the Claude CLI (maps to ~--allowedTools~). Empty by default (no tools allowed).
 
 *** Frontend
 - ~gh-copilot-chat-frontend~ - Frontend interface to use. Can be ~'org~ (default) or ~'markdown~.
