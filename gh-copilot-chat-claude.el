@@ -27,6 +27,8 @@
 
 ;;; Code:
 
+(defvar mcp-hub-servers)
+
 (defcustom gh-copilot-chat-claude-program "claude"
   "Claude program to use."
   :type 'string
@@ -46,6 +48,28 @@
  (current-data nil :type (or null string)))
 
 ;; functions
+(defun gh-copilot-chat--claude-mcp-config-arg (instance)
+  "Return --mcp-config JSON string for INSTANCE's MCP servers, or nil."
+  (when (and (bound-and-true-p mcp-hub-servers)
+             (gh-copilot-chat-mcp-servers instance))
+    (let ((servers-alist
+           (delq nil
+                 (mapcar
+                  (lambda (server-name)
+                    (let ((config (cdr (assoc server-name mcp-hub-servers))))
+                      (when config
+                        (let ((command (plist-get config :command))
+                              (args (plist-get config :args))
+                              (url (plist-get config :url)))
+                          (cons (intern server-name)
+                                (if url
+                                    `((url . ,url))
+                                  `((command . ,command)
+                                    (args . ,(vconcat args)))))))))
+                  (gh-copilot-chat-mcp-servers instance)))))
+      (when servers-alist
+        (json-encode `((mcpServers . ,servers-alist)))))))
+
 (defun gh-copilot-chat--claude-extract-segment (segment)
   "Extract data from an json string, returning one of:
 - `empty` if the segment has no data
@@ -170,6 +194,7 @@ if the prompt is out of context."
                      (eq (gh-copilot-chat-type instance) 'commit))
                 git-commit-instruction-content
               gh-copilot-chat-prompt)))
+         (mcp-config (gh-copilot-chat--claude-mcp-config-arg instance))
          (command
           (append
            (list
@@ -181,6 +206,8 @@ if the prompt is out of context."
              (list
               "--allowedTools"
               (concat "\"" gh-copilot-chat-claude-allowed-tools "\"")))
+           (when mcp-config
+             (list "--mcp-config" mcp-config))
            (when (and (not out-of-context)
                       (gh-copilot-chat-claude-session-id
                        (gh-copilot-chat--backend instance)))
