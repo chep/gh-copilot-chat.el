@@ -176,6 +176,13 @@ if the prompt is out of context."
   (when (buffer-live-p (gh-copilot-chat-chat-buffer instance))
     (gh-copilot-chat--spinner-start instance))
 
+  ;; Record prompt in history for navigation (M-p / M-n).
+  ;; The Claude backend relies on --resume for context, so only
+  ;; user prompts are stored here (not assistant answers).
+  (unless out-of-context
+    (push (list :role "user" :content prompt)
+          (gh-copilot-chat-history instance)))
+
   ;; start claude process
   (let* ((copilot-instruction-content
           (and gh-copilot-chat-use-copilot-instruction-files
