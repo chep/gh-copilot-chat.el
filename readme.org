@@ -13,6 +13,12 @@ This plugin allows you to chat with GitHub copilot.
 Feel free to contribute, report issues or discuss new features.
 
 * News
+** Claude Code backend
+A new ~claude~ backend is available, powered by the [[https://docs.anthropic.com/en/docs/claude-code][Claude Code CLI]].
+It does not require a GitHub account and brings several advantages: native MCP support,
+session resumption, Emacs IDE tools integration, and per-session tool authorization.
+See the [[*Claude backend][Claude backend]] section for configuration details.
+
 ** Repository renaming
 ~copilot-chat~ has been renamed ~gh-copilot-chat~ to avoid conflicts with ~copilot.el~.
 Everything is the same, functions and variable just have the ~gh-~ prefix.
@@ -72,6 +78,24 @@ Calling ~gh-copilot-chat-display~ with prefix argument will let you choose insta
 ** Save instance
 You can use ~gh-copilot-chat-save~ and ~gh-copilot-chat-load~ to save/restore a chat with its history.
 
+** Session tool permissions (Claude backend)
+When using the ~claude~ backend, Claude Code may need specific tools to fulfill a request
+(e.g. ~WebFetch~ to browse a URL, ~Bash~ to run a command). You can grant extra tools
+for the current session without restarting, using ~gh-copilot-chat-claude-set-allowed-tools~.
+
+It opens a ~completing-read-multiple~ prompt pre-filled with already-allowed tools.
+The candidates are built dynamically from built-in Claude tools, active MCP server wildcards
+(e.g. ~mcp__github__*~), and Emacs IDE tools. Free text is also accepted for any tool not in the list.
+
+#+begin_src emacs-lisp
+;; Example: bind it for quick access in the chat buffer
+(define-key gh-copilot-chat-prompt-mode-map
+  (kbd "C-c C-a") #'gh-copilot-chat-claude-set-allowed-tools)
+#+end_src
+
+Tools granted this way apply only to the current session and are combined with the
+always-allowed ~Edit Write Read~ defaults and the global ~gh-copilot-chat-claude-allowed-tools~.
+
 * Installation
 ** Melpa
 Copilot-chat is available on melpa :
@@ -106,7 +130,9 @@ You will need a GitHub account with access to copilot API. When sending the firs
 With curl, answers will be written token by token. Curl path can be set with the ~gh-copilot-chat-curl-program~ variable.
 
 *** Claude backend
-The ~claude~ backend uses the [[https://docs.anthropic.com/en/docs/claude-code][Claude CLI]] instead of the GitHub Copilot API. It does not require a GitHub account - authentication is handled by the Claude CLI itself.
+The ~claude~ backend uses the [[https://docs.anthropic.com/en/docs/claude-code][Claude CLI]] instead of the GitHub Copilot API. It
+does not require a GitHub account - authentication is handled by the Claude CLI
+itself.
 
 **** Prerequisites
 - Install the Claude CLI and make sure it is available in your PATH. See [[https://docs.anthropic.com/en/docs/claude-code/getting-started][Getting started with Claude Code]].
@@ -125,11 +151,17 @@ Or with ~use-package~:
 #+end_src
 
 **** Allowed tools
-By default, no tools are passed to the Claude CLI. You can allow specific built-in tools using the ~gh-copilot-chat-claude-allowed-tools~ variable (maps to ~--allowedTools~):
+By default, ~Edit~, ~Write~ and ~Read~ are always passed to the Claude CLI.
+You can persistently allow additional built-in tools using the
+~gh-copilot-chat-claude-allowed-tools~ variable (maps to ~--allowedTools~).
+Tool names are space-separated:
 #+begin_src emacs-lisp
-;; Example: allow bash and file editing tools
-(setq gh-copilot-chat-claude-allowed-tools "Bash,Edit,Write")
+;; Example: also allow Bash and web access globally
+(setq gh-copilot-chat-claude-allowed-tools "Bash WebFetch WebSearch")
 #+end_src
+
+To grant tools for a single session only (without changing your config), use
+~gh-copilot-chat-claude-set-allowed-tools~. See the [[*Session tool permissions (Claude backend)][Session tool permissions]] tip.
 
 **** MCP servers
 When MCP servers are configured via ~mcp-hub-servers~ and enabled for a ~gh-copilot-chat~ instance (using ~gh-copilot-chat-set-mcp-servers~), they are automatically passed to the Claude CLI via ~--mcp-config~. This allows Claude to use your MCP tools directly.
@@ -148,6 +180,15 @@ Example with a GitHub MCP server:
 #+end_src
 
 Then enable the server for your instance with ~gh-copilot-chat-set-mcp-servers~.
+
+**** Emacs IDE tools integration
+When the ~claude-code-ide-emacs-tools~ package is loaded, the Claude backend can
+automatically expose Emacs IDE tools (xref, imenu, project info…) to Claude Code via MCP.
+This is controlled by the ~gh-copilot-chat-claude-use-ide-tools~ variable (default: ~t~):
+#+begin_src emacs-lisp
+;; Disable IDE tools integration
+(setq gh-copilot-chat-claude-use-ide-tools nil)
+#+end_src
 
 **** Session resumption
 The Claude backend automatically resumes the conversation session between prompts using ~--resume~. This means the full conversation context is preserved inside the Claude CLI process, without being re-sent to the API on each turn.
@@ -212,6 +253,9 @@ You can call ~(gh-copilot-chat-transient)~ to open transient menu. Almost all fu
 *** MCP servers
 - ~(gh-copilot-chat-set-mcp-servers)~ open MCP server menu.
 
+*** Claude backend
+- ~(gh-copilot-chat-claude-set-allowed-tools)~ interactively set extra allowed tools for the current Claude session. Uses ~completing-read-multiple~ with candidates built from built-in tools, active MCP server wildcards, and Emacs IDE tools. Free text input is accepted. Changes apply only to the current session.
+
 *** Answer manipulation
 - ~(gh-copilot-chat-yank)~ yank the last code block at point (org frontend only).
 - ~(gh-copilot-chat-yank-pop)~ Replace last yank with previous block, or use argument to choose the block. Acts like ~(yank-pop)~ (org frontend only).
@@ -250,7 +294,6 @@ You can call ~(gh-copilot-chat-transient)~ to open transient menu. Almost all fu
 - ~(gh-copilot-chat-transient)~ display main transient menu to access all functions.
 - ~(gh-copilot-chat-transient-buffers)~ display transient menu for buffer management.
 - ~(gh-copilot-chat-transient-code)~ display transient menu for code helper functions.
-- ~(gh-copilot-chat-transient-magit)~ display transient menu for magit functions.
 
 *** Troubleshooting
 - ~(gh-copilot-chat-quotas)~ display GitHub copilot current quotas.
@@ -270,7 +313,8 @@ All variables can be customized using ~M-x customize-group RET gh-copilot-chat R
 - ~gh-copilot-chat-curl-proxy-insecure~ - Skip SSL verification for proxy connections in curl backend.
 - ~gh-copilot-chat-curl-proxy-user-pass~ - Proxy authentication credentials for curl backend.
 - ~gh-copilot-chat-claude-program~ - Path to the ~claude~ CLI executable (default: ~"claude"~). Set this if ~claude~ is not in your PATH.
-- ~gh-copilot-chat-claude-allowed-tools~ - Comma-separated list of tools allowed for the Claude CLI (maps to ~--allowedTools~). Empty by default (no tools allowed).
+- ~gh-copilot-chat-claude-allowed-tools~ - Space-separated list of tools persistently allowed for the Claude CLI (maps to ~--allowedTools~). Empty by default. ~Edit~, ~Write~ and ~Read~ are always allowed regardless of this setting.
+- ~gh-copilot-chat-claude-use-ide-tools~ - When non-nil (default), expose Emacs IDE tools (xref, imenu, project…) to Claude Code via MCP if the ~claude-code-ide-emacs-tools~ package is loaded.
 
 *** Frontend
 - ~gh-copilot-chat-frontend~ - Frontend interface to use. Can be ~'org~ (default) or ~'markdown~.
