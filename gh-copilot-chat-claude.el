@@ -39,6 +39,14 @@
   :type 'string
   :group 'gh-copilot-chat)
 
+(defcustom gh-copilot-chat-claude-use-ide-tools t
+  "When non-nil, expose claude-code-ide emacs-tools via MCP if the package is loaded."
+  :type 'boolean
+  :group 'gh-copilot-chat)
+
+(defconst gh-copilot-chat-claude--sys-prompt
+  "IMPORTANT: Connected to Emacs via claude-code-ide.el integration. Emacs uses mixed coordinates: Lines: 1-based (line 1 = first line), Columns: 0-based (column 0 = first column). Example: First character in file is at line 1, column 0. Available: xref (LSP), tree-sitter, imenu, project.el, flycheck/flymake diagnostics. Context-aware with automatic project/file/selection tracking.")
+
 ;; structures
 (cl-defstruct
  gh-copilot-chat-claude
@@ -48,27 +56,52 @@
  (current-data nil :type (or null string)))
 
 ;; functions
-(defun gh-copilot-chat--claude-mcp-config-arg (instance)
-  "Return --mcp-config JSON string for INSTANCE's MCP servers, or nil."
-  (when (and (bound-and-true-p mcp-hub-servers)
-             (gh-copilot-chat-mcp-servers instance))
-    (let ((servers-alist
-           (delq nil
-                 (mapcar
-                  (lambda (server-name)
-                    (let ((config (cdr (assoc server-name mcp-hub-servers))))
-                      (when config
-                        (let ((command (plist-get config :command))
-                              (args (plist-get config :args))
-                              (url (plist-get config :url)))
-                          (cons (intern server-name)
-                                (if url
-                                    `((url . ,url))
-                                  `((command . ,command)
-                                    (args . ,(vconcat args)))))))))
-                  (gh-copilot-chat-mcp-servers instance)))))
-      (when servers-alist
-        (json-encode `((mcpServers . ,servers-alist)))))))
+(defun gh-copilot-chat--claude-ide-setup (session-id)
+  "Start claude-code-ide emacs-tools MCP server and register SESSION-ID.
+Returns the mcpServers alist entry (with SESSION-ID in the URL) on success,
+nil if the package is not loaded or the server fails to start."
+  (when (and gh-copilot-chat-claude-use-ide-tools
+             (featurep 'claude-code-ide-emacs-tools)
+             (fboundp 'claude-code-ide-emacs-tools-setup)
+             (fboundp 'claude-code-ide-mcp-server-ensure-server)
+             (fboundp 'claude-code-ide-mcp-server-get-config)
+             (fboundp 'claude-code-ide-mcp-server-session-started))
+    (claude-code-ide-emacs-tools-setup)
+    (when (claude-code-ide-mcp-server-ensure-server)
+      (let* ((project-dir
+              (or (when (fboundp 'project-root)
+                    (when-let* ((proj (project-current)))
+                      (project-root proj)))
+                  default-directory))
+             (buffer (current-buffer)))
+        (claude-code-ide-mcp-server-session-started
+         session-id project-dir buffer)
+        (alist-get
+         'mcpServers (claude-code-ide-mcp-server-get-config session-id))))))
+
+(defun gh-copilot-chat--claude-mcp-config-arg (instance &optional ide-servers)
+  "Return --mcp-config JSON string for INSTANCE's MCP servers, or nil.
+IDE-SERVERS is an optional mcpServers alist from claude-code-ide to merge in."
+  (let* ((hub-servers
+          (when (and (bound-and-true-p mcp-hub-servers)
+                     (gh-copilot-chat-mcp-servers instance))
+            (delq
+             nil
+             (mapcar
+              (lambda (server-name)
+                (when-let* ((config (cdr (assoc server-name mcp-hub-servers))))
+                  (let ((command (plist-get config :command))
+                        (args (plist-get config :args))
+                        (url (plist-get config :url)))
+                    (cons
+                     (intern server-name)
+                     (if url
+                         `((url . ,url))
+                       `((command . ,command) (args . ,(vconcat args))))))))
+              (gh-copilot-chat-mcp-servers instance)))))
+         (all-servers (append hub-servers ide-servers)))
+    (when all-servers
+      (json-encode `((mcpServers . ,all-servers))))))
 
 (defun gh-copilot-chat--claude-extract-segment (segment)
   "Extract data from an json string, returning one of:
@@ -180,8 +213,8 @@ if the prompt is out of context."
   ;; The Claude backend relies on --resume for context, so only
   ;; user prompts are stored here (not assistant answers).
   (unless out-of-context
-    (push (list :role "user" :content prompt)
-          (gh-copilot-chat-history instance)))
+    (push
+     (list :role "user" :content prompt) (gh-copilot-chat-history instance)))
 
   ;; start claude process
   (let* ((copilot-instruction-content
@@ -201,18 +234,52 @@ if the prompt is out of context."
                      (eq (gh-copilot-chat-type instance) 'commit))
                 git-commit-instruction-content
               gh-copilot-chat-prompt)))
-         (mcp-config (gh-copilot-chat--claude-mcp-config-arg instance))
+         (ide-session-id
+          (when (and gh-copilot-chat-claude-use-ide-tools
+                     (featurep 'claude-code-ide-emacs-tools))
+            (format "gh-copilot-chat-%s"
+                    (format-time-string "%Y%m%d-%H%M%S%3N"))))
+         (ide-servers
+          (when ide-session-id
+            (gh-copilot-chat--claude-ide-setup ide-session-id)))
+         (sse-project-dir
+          (when (and gh-copilot-chat-claude-use-ide-tools
+                     (featurep 'claude-code-ide-mcp)
+                     (fboundp 'claude-code-ide-mcp-start))
+            (or (when (fboundp 'project-root)
+                  (when-let ((proj (project-current)))
+                    (project-root proj)))
+                default-directory)))
+         (mcp-config
+          (gh-copilot-chat--claude-mcp-config-arg instance ide-servers))
+         (all-allowed-tools
+          (let ((parts
+                 (delq
+                  nil
+                  (list
+                   "Edit Write Read"
+                   (unless (string-empty-p gh-copilot-chat-claude-allowed-tools)
+                     gh-copilot-chat-claude-allowed-tools)
+                   (when (and ide-servers
+                              (fboundp
+                               'claude-code-ide-mcp-server-get-tool-names))
+                     (mapconcat #'identity
+                                (claude-code-ide-mcp-server-get-tool-names
+                                 "mcp__emacs-tools__")
+                                " "))))))
+            (when parts
+              (string-join parts " "))))
          (command
           (append
            (list
             gh-copilot-chat-claude-program
             "--print"
             "--verbose"
-            "--output-format=stream-json")
-           (unless (string-empty-p gh-copilot-chat-claude-allowed-tools)
-             (list
-              "--allowedTools"
-              (concat "\"" gh-copilot-chat-claude-allowed-tools "\"")))
+            "--output-format=stream-json"
+            "--append-system-prompt"
+            gh-copilot-chat-claude--sys-prompt)
+           (when all-allowed-tools
+             (list "--allowedTools" all-allowed-tools))
            (when mcp-config
              (list "--mcp-config" mcp-config))
            (when (and (not out-of-context)
@@ -222,9 +289,9 @@ if the prompt is out of context."
               "--resume"
               (gh-copilot-chat-claude-session-id
                (gh-copilot-chat--backend instance))))
-           (list (concat "\"" prompt "\""))
+           (list prompt)
            (when instructions
-             (list "--system-prompt" (concat "\"" instructions "\""))))))
+             (list "--system-prompt" instructions)))))
     (setf (gh-copilot-chat-claude-process (gh-copilot-chat--backend instance))
           (make-process
            :name "gh-copilot-chat-claude"
@@ -246,6 +313,10 @@ if the prompt is out of context."
              (setf (gh-copilot-chat-claude-process
                     (gh-copilot-chat--backend instance))
                    nil)
+             (when (and ide-servers
+                        ide-session-id
+                        (fboundp 'claude-code-ide-mcp-server-session-ended))
+               (claude-code-ide-mcp-server-session-ended ide-session-id))
              (gh-copilot-chat--spinner-stop instance))
            :stderr (get-buffer-create "*gh-copilot-chat-claude-stderr*")
            :command command))))
