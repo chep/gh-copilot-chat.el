@@ -44,8 +44,23 @@
   :type 'boolean
   :group 'gh-copilot-chat)
 
-(defconst gh-copilot-chat-claude--sys-prompt
-  "IMPORTANT: Connected to Emacs via claude-code-ide.el integration. Emacs uses mixed coordinates: Lines: 1-based (line 1 = first line), Columns: 0-based (column 0 = first column). Example: First character in file is at line 1, column 0. Available: xref (LSP), tree-sitter, imenu, project.el, flycheck/flymake diagnostics. Context-aware with automatic project/file/selection tracking.")
+(defconst gh-copilot-chat-claude--builtin-tools
+  '("Bash"
+    "Edit"
+    "Write"
+    "Read"
+    "MultiEdit"
+    "WebSearch"
+    "WebFetch"
+    "TodoRead"
+    "TodoWrite"
+    "NotebookRead"
+    "NotebookEdit"
+    "LS"
+    "Glob"
+    "Grep"
+    "Task")
+  "Built-in Claude Code tools (fixed list).")
 
 ;; structures
 (cl-defstruct
@@ -53,9 +68,23 @@
  "Private data for Copilot chat claude backend."
  (process nil :type (or null process))
  (session-id nil :type (or null string))
- (current-data nil :type (or null string)))
+ (current-data nil :type (or null string))
+ (allowed-tools "" :type string))
 
 ;; functions
+
+(defun gh-copilot-chat-claude--tool-candidates (instance)
+  "Build tool completion candidates for INSTANCE.
+Combines built-in tools, MCP server wildcards, and IDE tools."
+  (append
+   gh-copilot-chat-claude--builtin-tools
+   (when (bound-and-true-p mcp-hub-servers)
+     (mapcar
+      (lambda (server-name) (format "mcp__%s__*" server-name))
+      (gh-copilot-chat-mcp-servers instance)))
+   (when (fboundp 'claude-code-ide-mcp-server-get-tool-names)
+     (claude-code-ide-mcp-server-get-tool-names "mcp__emacs-tools__"))))
+
 (defun gh-copilot-chat--claude-ide-setup (session-id)
   "Start claude-code-ide emacs-tools MCP server and register SESSION-ID.
 Returns the mcpServers alist entry (with SESSION-ID in the URL) on success,
@@ -217,7 +246,8 @@ if the prompt is out of context."
      (list :role "user" :content prompt) (gh-copilot-chat-history instance)))
 
   ;; start claude process
-  (let* ((copilot-instruction-content
+  (let* ((backend (gh-copilot-chat--backend instance))
+         (copilot-instruction-content
           (and gh-copilot-chat-use-copilot-instruction-files
                (gh-copilot-chat--read-copilot-instructions-file)))
          (formatted-copilot-instructions
@@ -242,31 +272,27 @@ if the prompt is out of context."
          (ide-servers
           (when ide-session-id
             (gh-copilot-chat--claude-ide-setup ide-session-id)))
-         (sse-project-dir
-          (when (and gh-copilot-chat-claude-use-ide-tools
-                     (featurep 'claude-code-ide-mcp)
-                     (fboundp 'claude-code-ide-mcp-start))
-            (or (when (fboundp 'project-root)
-                  (when-let ((proj (project-current)))
-                    (project-root proj)))
-                default-directory)))
          (mcp-config
           (gh-copilot-chat--claude-mcp-config-arg instance ide-servers))
          (all-allowed-tools
-          (let ((parts
-                 (delq
-                  nil
-                  (list
-                   "Edit Write Read"
-                   (unless (string-empty-p gh-copilot-chat-claude-allowed-tools)
-                     gh-copilot-chat-claude-allowed-tools)
-                   (when (and ide-servers
-                              (fboundp
-                               'claude-code-ide-mcp-server-get-tool-names))
-                     (mapconcat #'identity
-                                (claude-code-ide-mcp-server-get-tool-names
-                                 "mcp__emacs-tools__")
-                                " "))))))
+          (let* ((allowed (gh-copilot-chat-claude-allowed-tools backend))
+                 (parts
+                  (delq
+                   nil
+                   (list
+                    "Edit Write Read"
+                    (unless (string-empty-p
+                             gh-copilot-chat-claude-allowed-tools)
+                      gh-copilot-chat-claude-allowed-tools)
+                    (unless (string-empty-p allowed)
+                      allowed)
+                    (when (and ide-servers
+                               (fboundp
+                                'claude-code-ide-mcp-server-get-tool-names))
+                      (mapconcat #'identity
+                                 (claude-code-ide-mcp-server-get-tool-names
+                                  "mcp__emacs-tools__")
+                                 " "))))))
             (when parts
               (string-join parts " "))))
          (command
@@ -275,9 +301,7 @@ if the prompt is out of context."
             gh-copilot-chat-claude-program
             "--print"
             "--verbose"
-            "--output-format=stream-json"
-            "--append-system-prompt"
-            gh-copilot-chat-claude--sys-prompt)
+            "--output-format=stream-json")
            (when all-allowed-tools
              (list "--allowedTools" all-allowed-tools))
            (when mcp-config
@@ -289,9 +313,9 @@ if the prompt is out of context."
               "--resume"
               (gh-copilot-chat-claude-session-id
                (gh-copilot-chat--backend instance))))
-           (list prompt)
            (when instructions
-             (list "--system-prompt" instructions)))))
+             (list "--system-prompt" instructions))
+           (list prompt))))
     (setf (gh-copilot-chat-claude-process (gh-copilot-chat--backend instance))
           (make-process
            :name "gh-copilot-chat-claude"
@@ -333,6 +357,35 @@ if the prompt is out of context."
     (delete-process
      (gh-copilot-chat-claude-process (gh-copilot-chat--backend instance))))
   (gh-copilot-chat--spinner-stop instance))
+
+;;;###autoload
+(defun gh-copilot-chat-claude-set-allowed-tools ()
+  "Interactively set extra allowed tools for the current Claude session.
+The tools selected here are added on top of the always-allowed
+\"Edit Write Read\" and the global `gh-copilot-chat-claude-allowed-tools'."
+  (interactive)
+  (let* ((instance (gh-copilot-chat--current-instance))
+         (backend (gh-copilot-chat--backend instance)))
+    (unless (gh-copilot-chat-claude-p backend)
+      (user-error "Current backend is not Claude"))
+    (let* ((current (gh-copilot-chat-claude-allowed-tools backend))
+           (current-list (split-string current " " t))
+           (selected
+            (completing-read-multiple
+             (format "Allowed tools [current: %s]: "
+                     (if current-list
+                         (string-join current-list ", ")
+                       "none"))
+             (gh-copilot-chat-claude--tool-candidates instance) nil
+             nil ;; require-match = nil
+             (string-join current-list ","))))
+      (setf (gh-copilot-chat-claude-allowed-tools backend)
+            (string-join selected " "))
+      (message "Session allowed tools: %s"
+               (if selected
+                   (string-join selected " ")
+                 "(none)")))))
+
 
 ;; Top-level execute code.
 (cl-pushnew
