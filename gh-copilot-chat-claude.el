@@ -27,6 +27,12 @@
 
 ;;; Code:
 
+(require 'gh-copilot-chat-body)
+(require 'gh-copilot-chat-common)
+(require 'gh-copilot-chat-spinner)
+(require 'gh-copilot-chat-backend)
+(require 'gh-copilot-chat-mcp)
+
 (defvar mcp-hub-servers)
 
 (defcustom gh-copilot-chat-claude-program "claude"
