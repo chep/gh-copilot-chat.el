@@ -40,7 +40,7 @@
   :type 'string
   :group 'gh-copilot-chat)
 
-(defcustom gh-copilot-chat-claude-allowed-tools ""
+(defcustom gh-copilot-chat-claude-allowed-tools "Edit Write Read"
   "Claude allowed tools, see --allowedTools."
   :type 'string
   :group 'gh-copilot-chat)
@@ -286,7 +286,6 @@ if the prompt is out of context."
                   (delq
                    nil
                    (list
-                    "Edit Write Read"
                     (unless (string-empty-p
                              gh-copilot-chat-claude-allowed-tools)
                       gh-copilot-chat-claude-allowed-tools)
@@ -378,7 +377,8 @@ The tools selected here are added on top of the always-allowed
            (current-list (split-string current " " t))
            (selected
             (completing-read-multiple
-             (format "Allowed tools [current: %s]: "
+             (format "Allowed tools [global: %s] [current: %s]: "
+                     gh-copilot-chat-claude-allowed-tools
                      (if current-list
                          (string-join current-list ", ")
                        "none"))
