@@ -90,7 +90,8 @@ Argument SEGMENT is data segment to parse."
 INSTANCE is the copilot chat instance."
   (let ((results nil))
     (dolist (function functions)
-      (let* ((connection (gh-copilot-chat--mcp-find-connection instance function))
+      (let* ((connection
+              (gh-copilot-chat--mcp-find-connection instance function))
              (name (gh-copilot-chat-function-name function))
              (arguments (gh-copilot-chat-function-arguments function)))
         (if (yes-or-no-p
@@ -178,7 +179,8 @@ if the response should be added to history."
   ;;    the two trailing empty lines are skipped.
   (when (gh-copilot-chat-completions-current-data completions)
     (setq string
-          (concat (gh-copilot-chat-completions-current-data completions) string))
+          (concat
+           (gh-copilot-chat-completions-current-data completions) string))
     (setf (gh-copilot-chat-completions-current-data completions) nil))
 
   (let ((segments (split-string string "\n")))
@@ -205,23 +207,23 @@ if the response should be added to history."
                           "")
                        :role "assistant")))
                 (when functions
-                  (setq new-hist
-                        (append
-                         new-hist
-                         `(:tool_calls
-                           ,(vconcat
-                             (mapcar
-                              (lambda (function)
-                                `(:type
-                                  "function"
-                                  :id ,(gh-copilot-chat-function-id function)
-                                  :function
-                                  (:name
-                                   ,(gh-copilot-chat-function-name function)
-                                   :arguments
-                                   ,(gh-copilot-chat-function-arguments
-                                     function))))
-                              functions))))))
+                  (setq
+                   new-hist
+                   (append
+                    new-hist
+                    `(:tool_calls
+                      ,(vconcat
+                        (mapcar
+                         (lambda (function)
+                           `(:type
+                             "function"
+                             :id ,(gh-copilot-chat-function-id function)
+                             :function
+                             (:name
+                              ,(gh-copilot-chat-function-name function)
+                              :arguments
+                              ,(gh-copilot-chat-function-arguments function))))
+                         functions))))))
                 (when (or (not (string-empty-p answer)) functions)
                   (push new-hist (gh-copilot-chat-history instance)))))
 
@@ -252,7 +254,8 @@ if the response should be added to history."
                 (if (eq token :null)
                     (let ((tool_calls (alist-get 'tool_calls delta)))
                       (when (and tool_calls (not (eq tool_calls :null)))
-                        (setf (gh-copilot-chat-completions-functions completions)
+                        (setf (gh-copilot-chat-completions-functions
+                               completions)
                               (gh-copilot-chat--append-vector-to-functions
                                tool_calls
                                (gh-copilot-chat-completions-functions
@@ -300,7 +303,8 @@ Argument NO-HISTORY is a boolean to indicate
  if the response should be added to history."
   (when (gh-copilot-chat-completions-current-data completions)
     (setq string
-          (concat (gh-copilot-chat-completions-current-data completions) string))
+          (concat
+           (gh-copilot-chat-completions-current-data completions) string))
     (setf (gh-copilot-chat-completions-current-data completions) nil))
 
   (condition-case err
@@ -356,7 +360,8 @@ Argument PROMPT Copilot prompt to send (string or list of json objects)
 Argument NO-CONTEXT tells `gh-copilot-chat' to not send history and buffers.
 The create req function is called first and will return new prompt."
   (let* ((create-req-fn
-          (gh-copilot-chat-frontend-create-req-fn (gh-copilot-chat--get-frontend)))
+          (gh-copilot-chat-frontend-create-req-fn
+           (gh-copilot-chat--get-frontend)))
          (copilot-instruction-content
           (and gh-copilot-chat-use-copilot-instruction-files
                (gh-copilot-chat--read-copilot-instructions-file)))
@@ -386,7 +391,8 @@ The create req function is called first and will return new prompt."
     (unless no-context
       ;; Clean buffer list once and add buffer contents
       (setf (gh-copilot-chat-buffers instance)
-            (cl-remove-if-not #'buffer-live-p (gh-copilot-chat-buffers instance)))
+            (cl-remove-if-not
+             #'buffer-live-p (gh-copilot-chat-buffers instance)))
       (dolist (buffer (gh-copilot-chat-buffers instance))
         (setq messages
               (gh-copilot-chat--add-buffer-to-req buffer instance messages)))

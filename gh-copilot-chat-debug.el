@@ -39,7 +39,8 @@ For example, `'commit', `'model', `'auth'.
 FORMAT-STRING is the format string passed to `message'.
 ARGS are the arguments to be formatted according to FORMAT-STRING.
 
-The message is prefixed with '[gh-copilot-chat:CATEGORY]' for easy identification.
+The message is prefixed with
+'[gh-copilot-chat:CATEGORY]' for easy identification.
 No message is printed if `gh-copilot-chat-debug' is nil."
   (when gh-copilot-chat-debug
     (unless (symbolp category)
