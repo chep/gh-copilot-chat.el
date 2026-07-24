@@ -203,6 +203,8 @@ if the prompt is out of context."
             (alist-get 'session_id data))
       (when (string= (alist-get 'subtype data) "error")
         (funcall callback instance (alist-get 'result data)))
+      (let ((hist `(:content ,(alist-get 'result data) :role "assistant")))
+        (push hist (gh-copilot-chat-history instance)))
       (funcall callback instance gh-copilot-chat--magic)))))
 
 (defun gh-copilot-chat--claude-analyze-answer
@@ -245,8 +247,6 @@ if the prompt is out of context."
     (gh-copilot-chat--spinner-start instance))
 
   ;; Record prompt in history for navigation (M-p / M-n).
-  ;; The Claude backend relies on --resume for context, so only
-  ;; user prompts are stored here (not assistant answers).
   (unless out-of-context
     (push
      (list :role "user" :content prompt) (gh-copilot-chat-history instance)))
