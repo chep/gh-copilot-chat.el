@@ -70,12 +70,13 @@
 
 (defcustom gh-copilot-chat-backend 'curl
   "Copilot chat backend.  Can be `curl` or a custom on."
-  :type '(choice (const :tag "curl" curl) (const :tag "request" request))
+  :type '(choice (const :tag "curl" curl) (const :tag "claude" claude))
   :set
   (lambda (symbol value)
     (set-default-toplevel-value symbol value)
     (pcase value
-      (`curl (require 'gh-copilot-chat-curl))))
+      (`curl (require 'gh-copilot-chat-curl))
+      (`claude (require 'gh-copilot-chat-claude))))
   :group 'gh-copilot-chat)
 
 (provide 'gh-copilot-chat)
