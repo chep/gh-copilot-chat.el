@@ -41,7 +41,7 @@
   :group 'gh-copilot-chat)
 
 (defcustom gh-copilot-chat-claude-allowed-tools "Edit Write Read"
-  "Claude allowed tools, see --allowedTools."
+  "Space-separated list of additional tools to allow for the Claude CLI (maps to --allowedTools)."
   :type 'string
   :group 'gh-copilot-chat)
 
@@ -328,7 +328,7 @@ if the prompt is out of context."
            :filter
            (lambda (proc string)
              (gh-copilot-chat--debug
-              'curl "gh-copilot-chat--claude-ask: %s" string)
+              'claude "gh-copilot-chat--claude-ask: %s" string)
              (gh-copilot-chat--claude-analyze-answer
               instance string callback out-of-context))
            :sentinel
