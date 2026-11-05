@@ -32,6 +32,7 @@
 (require 'gh-copilot-chat-spinner)
 (require 'gh-copilot-chat-backend)
 (require 'gh-copilot-chat-mcp)
+(require 'gh-copilot-chat-mcp-proxy)
 
 (defvar mcp-hub-servers)
 
@@ -125,14 +126,24 @@ IDE-SERVERS is an optional mcpServers alist from claude-code-ide to merge in."
              (mapcar
               (lambda (server-name)
                 (when-let* ((config (cdr (assoc server-name mcp-hub-servers))))
-                  (let ((command (plist-get config :command))
-                        (args (plist-get config :args))
-                        (url (plist-get config :url)))
-                    (cons
-                     (intern server-name)
-                     (if url
-                         `((url . ,url))
-                       `((command . ,command) (args . ,(vconcat args))))))))
+                  (cons
+                   (intern server-name)
+                   (or (gh-copilot-chat-mcp-proxy-config server-name)
+                       (let ((url (plist-get config :url))
+                             (env (plist-get config :env)))
+                         (if url
+                             `((url . ,url))
+                           `((command . ,(plist-get config :command))
+                             (args . ,(vconcat (plist-get config :args))) ,@
+                             (when env
+                               `((env
+                                  .
+                                  ,(cl-loop
+                                    for (k v) on env by #'cddr collect
+                                    (cons
+                                     (intern
+                                      (substring (symbol-name k) 1))
+                                     v))))))))))))
               (gh-copilot-chat-mcp-servers instance)))))
          (all-servers (append hub-servers ide-servers)))
     (when all-servers
