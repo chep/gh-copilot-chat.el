@@ -88,6 +88,7 @@
    ("o" "Optimize" gh-copilot-chat-optimize)
    ("t" "Test" gh-copilot-chat-test)
    ("F" "Explain function" gh-copilot-chat-explain-defun)
+   ("i" "Fill function" gh-copilot-chat-fill-function)
    ("c" "Custom prompt function" gh-copilot-chat-custom-prompt-function)
    ("R" "Review whole buffer" gh-copilot-chat-review-whole-buffer)
    ("q" "Quit" transient-quit-one)]])
