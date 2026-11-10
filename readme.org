@@ -282,6 +282,7 @@ You can call ~(gh-copilot-chat-transient)~ to open transient menu. Almost all fu
 - ~(gh-copilot-chat-optimize)~ ask copilot to optimize selected code.
 - ~(gh-copilot-chat-test)~ ask copilot to write tests for selected code.
 - ~(gh-copilot-chat-explain-defun)~ ask copilot to explain current function under point.
+- ~(gh-copilot-chat-fill-function)~ ask copilot to fill (implement) the function under point, or the active region, and replace it in the buffer. Works with any major mode supporting ~beginning-of-defun~ / ~end-of-defun~ (including tree-sitter modes). With a prefix argument, ask for additional instructions. The prompt can be customized with ~gh-copilot-chat-fill-function-prompt~, and ~gh-copilot-chat-fill-function-send-buffer~ controls whether the whole buffer is sent as context.
 - ~(gh-copilot-chat-custom-prompt-function)~ ask copilot to apply a custom prompt to the function body under point. Eg. instruct on how to refactor the function.
 - ~(gh-copilot-chat-review-whole-buffer)~ ask copilot to review the current whole buffer. It can be used to review the full class, or, review the magit diff for my change, or other people's change.
 

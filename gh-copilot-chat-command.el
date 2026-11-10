@@ -27,12 +27,17 @@
 ;;; Code:
 
 (require 'polymode)
+(require 'pulse)
+(require 'subr-x)
+(require 'thingatpt)
 
 (require 'gh-copilot-chat-copilot)
 (require 'gh-copilot-chat-git)
 (require 'gh-copilot-chat-model)
 (require 'gh-copilot-chat-prompt-mode)
+(require 'gh-copilot-chat-prompts)
 (require 'gh-copilot-chat-request)
+(require 'gh-copilot-chat-spinner)
 
 ;; customs
 (defcustom gh-copilot-chat-list-added-buffers-only nil
@@ -56,6 +61,12 @@ If nil, show absolute path."
   (concat user-emacs-directory "gh-copilot-chat")
   "Default directory to save chats."
   :type 'string
+  :group 'gh-copilot-chat)
+
+(defcustom gh-copilot-chat-fill-function-send-buffer t
+  "If non-nil, `gh-copilot-chat-fill-function' sends the whole buffer.
+The buffer content is given to Copilot as context to fill the function."
+  :type 'boolean
   :group 'gh-copilot-chat)
 
 ;; Faces
@@ -250,6 +261,125 @@ Given the code line as background info."
     (mark-defun)
     (gh-copilot-chat-custom-prompt-selection)
     (deactivate-mark)))
+
+(defun gh-copilot-chat--fill-function-bounds ()
+  "Return (BEG . END) of the active region or of the function around point.
+The function is found with `bounds-of-thing-at-point', which relies on
+`beginning-of-defun' and `end-of-defun': it works for every major mode
+supporting them, including tree-sitter ones.  BEG is moved to the beginning
+of its line when only indentation precedes it, so that whole lines are
+replaced."
+  (let ((bounds
+         (if (use-region-p)
+             (cons (region-beginning) (region-end))
+           (bounds-of-thing-at-point 'defun))))
+    (unless bounds
+      (user-error "No function at point"))
+    (save-excursion
+      (goto-char (car bounds))
+      (skip-chars-backward " \t")
+      (when (bolp)
+        (setcar bounds (point))))
+    bounds))
+
+(defun gh-copilot-chat--fill-function-make-prompt (code &optional instructions)
+  "Build the prompt asking Copilot to fill the function CODE.
+The current buffer is sent as context when
+`gh-copilot-chat-fill-function-send-buffer' is non-nil.
+Optional INSTRUCTIONS are appended to the prompt."
+  (let ((lang
+         (or (gh-copilot-chat--get-language)
+             (string-remove-suffix "-mode" (symbol-name major-mode)))))
+    (concat
+     (format "Language: %s\n" lang)
+     (when gh-copilot-chat-fill-function-send-buffer
+       (format "\nFile `%s`:\n```%s\n%s\n```\n"
+               (buffer-name)
+               lang
+               (buffer-substring-no-properties (point-min) (point-max))))
+     (format "\nFunction to fill:\n```%s\n%s\n```\n" lang code)
+     (when (and instructions (not (string-empty-p instructions)))
+       (format "\nAdditional instructions: %s\n" instructions)))))
+
+(defun gh-copilot-chat--extract-code (content)
+  "Return the code contained in Copilot answer CONTENT.
+If CONTENT contains a Markdown or Org source block, return its body.
+Leading and trailing empty lines are removed."
+  (let ((case-fold-search t))
+    (string-trim (if (string-match
+                      (concat
+                       "^[ \t]*\\(?:```\\|#\\+begin_src\\).*\n"
+                       "\\(\\(?:.*\n\\)*?\\)"
+                       "[ \t]*\\(?:```\\|#\\+end_src\\)")
+                      content)
+                     (match-string 1 content)
+                   content)
+                 "\\(?:[ \t]*\n\\)+" "[ \t\n]+")))
+
+(defun gh-copilot-chat--fill-function-replace (overlay code)
+  "Replace the text covered by OVERLAY with CODE, then delete OVERLAY.
+The indentation of the original first line is kept and the whole change can
+be undone at once."
+  (let ((buffer (overlay-buffer overlay)))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (let* ((beg (overlay-start overlay))
+               (end (copy-marker (overlay-end overlay) t))
+               (indent
+                (save-excursion
+                  (goto-char beg)
+                  (current-indentation))))
+          (delete-overlay overlay)
+          (when (eq (char-before end) ?\n)
+            (setq code (concat code "\n")))
+          (with-undo-amalgamate
+            (replace-region-contents beg end (lambda () code))
+            (save-excursion
+              (goto-char beg)
+              (when (bolp)
+                (indent-rigidly beg end (- indent (current-indentation))))))
+          (pulse-momentary-highlight-region beg end)
+          (set-marker end nil)
+          (message "Function filled by Copilot"))))))
+
+(defun gh-copilot-chat--fill-function-callback (overlay)
+  "Return a backend callback filling the function covered by OVERLAY.
+The answer is accumulated and inserted once complete."
+  (let ((answer ""))
+    (lambda (instance content)
+      (if (not (string= content gh-copilot-chat--magic))
+          (setq answer (concat answer content))
+        (gh-copilot-chat--spinner-stop instance)
+        (gh-copilot-chat--fill-function-replace
+         overlay (gh-copilot-chat--extract-code answer))))))
+
+;;;###autoload (autoload 'gh-copilot-chat-fill-function "gh-copilot-chat" nil t)
+(defun gh-copilot-chat-fill-function (&optional instructions)
+  "Ask Copilot to fill the function around point.
+If the region is active, it is used instead of the function around point.
+The function is replaced by Copilot answer once it is received; the change
+can be undone at once with \\[undo].
+With a prefix argument, ask for additional INSTRUCTIONS."
+  (interactive (list
+                (when current-prefix-arg
+                  (read-string "Additional instructions: "))))
+  (barf-if-buffer-read-only)
+  (let* ((instance (gh-copilot-chat--current-instance))
+         (bounds (gh-copilot-chat--fill-function-bounds))
+         (code (buffer-substring-no-properties (car bounds) (cdr bounds)))
+         (prompt (gh-copilot-chat--fill-function-make-prompt code instructions))
+         (overlay (make-overlay (car bounds) (cdr bounds))))
+    (overlay-put overlay 'face 'secondary-selection)
+    (deactivate-mark)
+    (message "Asking Copilot to fill function...")
+    (condition-case err
+        (let ((gh-copilot-chat-prompt gh-copilot-chat-fill-function-prompt))
+          (gh-copilot-chat--ask
+           instance prompt (gh-copilot-chat--fill-function-callback overlay) t))
+      (error
+       (delete-overlay overlay)
+       (gh-copilot-chat--spinner-stop instance)
+       (signal (car err) (cdr err))))))
 
 ;;;###autoload (autoload 'gh-copilot-chat-review-whole-buffer "gh-copilot-chat" nil t)
 (defun gh-copilot-chat-review-whole-buffer ()
