@@ -294,7 +294,8 @@ Optional INSTRUCTIONS are appended to the prompt."
      (format "Language: %s\n" lang)
      (when gh-copilot-chat-fill-function-send-buffer
        (format "\nFile `%s`:\n```%s\n%s\n```\n"
-               (buffer-name) lang
+               (buffer-name)
+               lang
                (buffer-substring-no-properties (point-min) (point-max))))
      (format "\nFunction to fill:\n```%s\n%s\n```\n" lang code)
      (when (and instructions (not (string-empty-p instructions)))
@@ -305,16 +306,15 @@ Optional INSTRUCTIONS are appended to the prompt."
 If CONTENT contains a Markdown or Org source block, return its body.
 Leading and trailing empty lines are removed."
   (let ((case-fold-search t))
-    (string-trim
-     (if (string-match
-          (concat
-           "^[ \t]*\\(?:```\\|#\\+begin_src\\).*\n"
-           "\\(\\(?:.*\n\\)*?\\)"
-           "[ \t]*\\(?:```\\|#\\+end_src\\)")
-          content)
-         (match-string 1 content)
-       content)
-     "\\(?:[ \t]*\n\\)+" "[ \t\n]+")))
+    (string-trim (if (string-match
+                      (concat
+                       "^[ \t]*\\(?:```\\|#\\+begin_src\\).*\n"
+                       "\\(\\(?:.*\n\\)*?\\)"
+                       "[ \t]*\\(?:```\\|#\\+end_src\\)")
+                      content)
+                     (match-string 1 content)
+                   content)
+                 "\\(?:[ \t]*\n\\)+" "[ \t\n]+")))
 
 (defun gh-copilot-chat--fill-function-replace (overlay code)
   "Replace the text covered by OVERLAY with CODE, then delete OVERLAY.
@@ -375,9 +375,7 @@ With a prefix argument, ask for additional INSTRUCTIONS."
     (condition-case err
         (let ((gh-copilot-chat-prompt gh-copilot-chat-fill-function-prompt))
           (gh-copilot-chat--ask
-           instance prompt
-           (gh-copilot-chat--fill-function-callback overlay)
-           t))
+           instance prompt (gh-copilot-chat--fill-function-callback overlay) t))
       (error
        (delete-overlay overlay)
        (gh-copilot-chat--spinner-stop instance)
